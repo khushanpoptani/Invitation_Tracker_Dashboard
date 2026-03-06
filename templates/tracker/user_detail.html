@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8 col-xl-7">
+    <div class="card dashboard-card">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <h1 class="h4 mb-0">User Details</h1>
+          <a href="{% url 'user_list' %}" class="btn btn-outline-secondary btn-sm">Back</a>
+        </div>
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Username</dt><dd class="col-sm-8">{{ user_obj.username }}</dd>
+          <dt class="col-sm-4">Full Name</dt><dd class="col-sm-8">{{ user_obj.get_full_name|default:'-' }}</dd>
+          <dt class="col-sm-4">Email</dt><dd class="col-sm-8">{{ user_obj.email|default:'-' }}</dd>
+          <dt class="col-sm-4">Active</dt><dd class="col-sm-8">{{ user_obj.is_active }}</dd>
+          <dt class="col-sm-4">Staff</dt><dd class="col-sm-8">{{ user_obj.is_staff }}</dd>
+          <dt class="col-sm-4">Date Joined</dt><dd class="col-sm-8">{{ user_obj.date_joined }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

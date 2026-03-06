@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h1 class="h3 mb-0">Sent Connections</h1>
+  <a href="{% url 'upload_sent_connections_csv' %}" class="btn btn-primary">Upload CSV</a>
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-12 col-md-5 col-lg-4">
+    {{ user_filter_form.user.label_tag }}
+    {{ user_filter_form.user }}
+  </div>
+  <div class="col-12 col-md-3 col-lg-2">
+    <button type="submit" class="btn btn-outline-primary w-100">Filter</button>
+  </div>
+</form>
+
+<div class="card dashboard-card">
+  <div class="card-body table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Profile Link</th>
+          <th>Message</th>
+          <th>Message ID</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Follow Up 1</th>
+          <th>Follow Up 2</th>
+          <th>Follow Up 3</th>
+          <th>User</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in connections %}
+          <tr>
+            <td>{{ row.name }}</td>
+            <td>
+              {% if row.profile_link %}
+                <a href="{{ row.profile_link }}" target="_blank">Open</a>
+              {% endif %}
+            </td>
+            <td>{{ row.message|truncatechars:60 }}</td>
+            <td>{{ row.message_id }}</td>
+            <td>{{ row.date }}</td>
+            <td>{{ row.connection_status.name }}</td>
+            <td>{{ row.follow_up_message_1|default:'-'|truncatechars:50 }}</td>
+            <td>{{ row.follow_up_message_2|default:'-'|truncatechars:50 }}</td>
+            <td>{{ row.follow_up_message_3|default:'-'|truncatechars:50 }}</td>
+            <td>{{ row.user.username }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="10" class="text-center text-muted">No sent connections found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

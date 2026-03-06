@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8 col-xl-7">
+    <div class="card dashboard-card">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-3">{{ title }}</h1>
+
+        <form method="post" id="message-type-create-form">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            {{ form.user.label_tag }}
+            {{ form.user }}
+            <div class="form-text">Select user first to auto-generate the next Message ID.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="generated-message-id" class="form-label">Message ID</label>
+            <input
+              type="text"
+              id="generated-message-id"
+              class="form-control"
+              value="{{ next_message_id }}"
+              readonly
+            >
+          </div>
+
+          <div class="mb-3">
+            {{ form.message.label_tag }}
+            {{ form.message }}
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="submit" class="btn btn-primary" id="save-btn">Save</button>
+            <a href="{{ cancel_url }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const userSelect = document.getElementById("id_user");
+    const messageInput = document.getElementById("id_message");
+    const messageIdField = document.getElementById("generated-message-id");
+    const saveButton = document.getElementById("save-btn");
+
+    if (!userSelect || !messageInput || !messageIdField || !saveButton) {
+      return;
+    }
+
+    function setFormEnabled(enabled) {
+      messageInput.disabled = !enabled;
+      saveButton.disabled = !enabled;
+      messageInput.placeholder = enabled ? "Enter message" : "Select a user first";
+    }
+
+    function loadNextMessageId() {
+      const userId = userSelect.value;
+      if (!userId) {
+        messageIdField.value = "";
+        setFormEnabled(false);
+        return;
+      }
+
+      fetch("{% url 'message_type_next_id' %}?user_id=" + encodeURIComponent(userId), {
+        headers: {"X-Requested-With": "XMLHttpRequest"}
+      })
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function (data) {
+          messageIdField.value = data.next_message_id || "";
+          setFormEnabled(true);
+        })
+        .catch(function () {
+          messageIdField.value = "";
+          setFormEnabled(false);
+        });
+    }
+
+    userSelect.addEventListener("change", loadNextMessageId);
+
+    if (!userSelect.value) {
+      setFormEnabled(false);
+    } else {
+      setFormEnabled(true);
+      if (!messageIdField.value) {
+        loadNextMessageId();
+      }
+    }
+  })();
+</script>
+{% endblock %}

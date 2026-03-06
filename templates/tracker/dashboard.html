@@ -1,0 +1,508 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+  .dashboard-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .page-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .page-heading h1 {
+    margin: 0;
+    font-size: clamp(1.5rem, 2.2vw, 2rem);
+  }
+
+  .page-subtitle {
+    color: #6b7a8f;
+    margin: 0.2rem 0 0;
+    font-size: 0.95rem;
+  }
+
+  .top-user-picker {
+    min-width: 260px;
+    max-width: 360px;
+    width: 100%;
+  }
+
+  @media (min-width: 992px) {
+    .top-user-picker {
+      width: 320px;
+    }
+  }
+
+  .filters-card .card-body {
+    padding: 1.1rem;
+  }
+
+  .filters-title {
+    font-size: 0.85rem;
+    color: #5e6e85;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  #message-dropdown-toggle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 2rem;
+  }
+
+  .message-dropdown-menu {
+    max-height: 22rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .message-dropdown-item {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.25rem;
+  }
+
+  .message-dropdown-item .message-item-id {
+    font-weight: 700;
+  }
+
+  .message-dropdown-item .message-item-text {
+    display: block;
+    font-size: 0.84rem;
+    color: #5f6b78;
+    margin-top: 0.1rem;
+  }
+
+  .mini-metric {
+    border: 1px solid #dce7f3;
+    border-radius: 1rem;
+    padding: 0.95rem 1rem;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(25, 55, 89, 0.07);
+    height: 100%;
+  }
+
+  .mini-metric .icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .mini-metric .label {
+    color: #5f6f86;
+    font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .mini-metric .value {
+    font-size: 1.95rem;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .metric-blue .icon {
+    background: #e9f2ff;
+    color: #1f73e9;
+  }
+
+  .metric-green .icon {
+    background: #e8f6ee;
+    color: #1f8a56;
+  }
+
+  .metric-amber .icon {
+    background: #fff2de;
+    color: #b36a00;
+  }
+
+  .metric-indigo .icon {
+    background: #eaf0ff;
+    color: #435ecf;
+  }
+
+  .metric-slate .icon {
+    background: #eef3f8;
+    color: #41566d;
+  }
+
+  .summary-card {
+    border-radius: 1rem;
+    border: 1px solid #dce7f3;
+    padding: 1rem;
+    height: 100%;
+    box-shadow: 0 8px 22px rgba(25, 55, 89, 0.07);
+  }
+
+  .summary-card h3 {
+    font-size: 1rem;
+    margin: 0 0 0.9rem;
+  }
+
+  .summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .summary-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    font-size: 1rem;
+  }
+
+  .summary-item .count {
+    font-weight: 800;
+  }
+
+  .summary-neutral {
+    background: #ffffff;
+  }
+
+  .summary-success {
+    background: #edf8f2;
+    border-color: #b9dfc8;
+  }
+
+  .summary-warning {
+    background: #fff7e3;
+    border-color: #eedaa0;
+  }
+
+  .summary-info {
+    background: #ebf3ff;
+    border-color: #b8d1ff;
+  }
+
+  @media (max-width: 767.98px) {
+    .filters-card .card-body,
+    .mini-metric,
+    .summary-card {
+      padding: 0.9rem;
+    }
+
+    .mini-metric .value {
+      font-size: 1.6rem;
+    }
+  }
+</style>
+
+<div class="dashboard-page">
+  <div class="page-heading">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="page-subtitle">Track sent, accepted, and pending connections with user, message, and date filters.</p>
+    </div>
+    <div class="top-user-picker">
+      <label class="form-label">User</label>
+      <select name="user" id="dashboard-user-select" class="form-select" form="dashboard-filter-form">
+        {% for user_obj in users %}
+          <option value="{{ user_obj.id }}" {% if selected_user and user_obj.id == selected_user.id %}selected{% endif %}>
+            {{ user_obj.get_full_name|default:user_obj.username }} (@{{ user_obj.username }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  {% if not selected_user %}
+    <div class="alert alert-info mb-0">No active users found.</div>
+  {% else %}
+    <div class="card dashboard-card filters-card mt-1">
+      <div class="card-body">
+        <div class="filters-title">
+          <i class="bi bi-funnel"></i>
+          <span>Message And Date Filters</span>
+        </div>
+        <form method="get" id="dashboard-filter-form" class="row g-3 align-items-end">
+          <div class="col-12 col-md-6 col-xl-6">
+            <label class="form-label">Message ID</label>
+            <input type="hidden" name="message_id" id="message-id-hidden" value="{{ selected_message_id }}">
+            <div class="dropdown w-100" id="message-dropdown">
+              <button
+                class="btn btn-outline-secondary dropdown-toggle w-100 text-start"
+                type="button"
+                id="message-dropdown-toggle"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+                aria-expanded="false"
+              >
+                {{ selected_message_label }}
+              </button>
+              <ul class="dropdown-menu w-100 p-2 message-dropdown-menu" aria-labelledby="message-dropdown-toggle">
+                <li>
+                  <input
+                    id="message-dropdown-search"
+                    type="text"
+                    class="form-control form-control-sm"
+                    placeholder="Search message text or ID"
+                  >
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li data-item-row>
+                  <button
+                    type="button"
+                    class="dropdown-item message-dropdown-item"
+                    data-message-item
+                    data-value=""
+                    data-label="All Message IDs"
+                    data-search="all message ids"
+                  >
+                    All Message IDs
+                  </button>
+                </li>
+                {% for option in message_options %}
+                  <li data-item-row>
+                    <button
+                      type="button"
+                      class="dropdown-item message-dropdown-item"
+                      data-message-item
+                      data-value="{{ option.message_id }}"
+                      data-label="{{ option.message_id }}{% if option.message_preview %} - {{ option.message_preview }}{% endif %}"
+                      data-search="{{ option.message_id|lower }} {{ option.message_text|lower }}"
+                    >
+                      <span class="message-item-id">{{ option.message_id }}</span>
+                      {% if option.message_preview %}
+                        <span class="message-item-text">{{ option.message_preview }}</span>
+                      {% endif %}
+                    </button>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <label class="form-label">From Date</label>
+            <input type="date" name="from_date" value="{{ from_date }}" class="form-control">
+          </div>
+          <div class="col-12 col-sm-6 col-xl-3">
+            <label class="form-label">To Date</label>
+            <input type="date" name="to_date" value="{{ to_date }}" class="form-control">
+          </div>
+        </form>
+        <p class="text-muted small mb-0 mt-3">Filters auto-apply when user, message, or dates are changed.</p>
+      </div>
+    </div>
+
+    <p class="text-muted small mb-2 mt-2">{% if has_date_filter %}Selected message/date filter counts.{% else %}Selected message counts (date filter not provided, so overall is used).{% endif %}</p>
+
+    <div class="row g-3 row-cols-1 row-cols-sm-2 row-cols-xl-4">
+      <div class="col">
+        <div class="mini-metric metric-slate">
+          <div class="icon"><i class="bi bi-funnel-fill"></i></div>
+          <div class="label">Sent Connections ({{ date_filter_label }})</div>
+          <div class="value">{{ filtered_sent_count }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-green">
+          <div class="icon"><i class="bi bi-funnel-fill"></i></div>
+          <div class="label">Accepted ({{ date_filter_label }})</div>
+          <div class="value">{{ filtered_accepted_count }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-amber">
+          <div class="icon"><i class="bi bi-funnel-fill"></i></div>
+          <div class="label">Pending ({{ date_filter_label }})</div>
+          <div class="value">{{ filtered_pending_count }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-indigo">
+          <div class="icon"><i class="bi bi-funnel-fill"></i></div>
+          <div class="label">Follow Up Sent ({{ date_filter_label }})</div>
+          <div class="value">{{ filtered_follow_up_count }}</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-muted small mb-2 mt-2">User-level week, month, and overall metrics.</p>
+
+    <div class="row g-3 row-cols-1 row-cols-sm-2 row-cols-xl-3">
+      <div class="col">
+        <div class="mini-metric metric-slate">
+          <div class="icon"><i class="bi bi-calendar-week"></i></div>
+          <div class="label">Total Sent (Week)</div>
+          <div class="value">{{ global_sent_counts.week }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-blue">
+          <div class="icon"><i class="bi bi-calendar3"></i></div>
+          <div class="label">Total Sent (Month)</div>
+          <div class="value">{{ global_sent_counts.month }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-blue">
+          <div class="icon"><i class="bi bi-infinity"></i></div>
+          <div class="label">Total Sent (Overall)</div>
+          <div class="value">{{ global_sent_counts.total }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-green">
+          <div class="icon"><i class="bi bi-check2-circle"></i></div>
+          <div class="label">Accepted (Week)</div>
+          <div class="value">{{ global_accepted_counts.week }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-green">
+          <div class="icon"><i class="bi bi-check2-square"></i></div>
+          <div class="label">Accepted (Month)</div>
+          <div class="value">{{ global_accepted_counts.month }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-green">
+          <div class="icon"><i class="bi bi-check2-all"></i></div>
+          <div class="label">Accepted (Overall)</div>
+          <div class="value">{{ global_accepted_counts.total }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-amber">
+          <div class="icon"><i class="bi bi-reply"></i></div>
+          <div class="label">Follow Up Sent (Week)</div>
+          <div class="value">{{ global_follow_up_counts.week }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-amber">
+          <div class="icon"><i class="bi bi-reply-all"></i></div>
+          <div class="label">Follow Up Sent (Month)</div>
+          <div class="value">{{ global_follow_up_counts.month }}</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="mini-metric metric-amber">
+          <div class="icon"><i class="bi bi-envelope-check"></i></div>
+          <div class="label">Follow Up Sent (Overall)</div>
+          <div class="value">{{ global_follow_up_counts.total }}</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-muted small mb-2 mt-2">Selected message week, month, and overall metrics.</p>
+
+    <div class="row g-3">
+      <div class="col-12 col-xl-3">
+        <div class="summary-card summary-neutral">
+          <h3>Sent Connections</h3>
+          <div class="summary-list">
+            <div class="summary-item"><span>This Week</span><span class="count">{{ sent_counts.week }}</span></div>
+            <div class="summary-item"><span>This Month</span><span class="count">{{ sent_counts.month }}</span></div>
+            <div class="summary-item"><span>Overall</span><span class="count">{{ sent_counts.total }}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-3">
+        <div class="summary-card summary-success">
+          <h3>Accepted Connections</h3>
+          <div class="summary-list">
+            <div class="summary-item"><span>This Week</span><span class="count">{{ accepted_counts.week }}</span></div>
+            <div class="summary-item"><span>This Month</span><span class="count">{{ accepted_counts.month }}</span></div>
+            <div class="summary-item"><span>Overall</span><span class="count">{{ accepted_counts.total }}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-3">
+        <div class="summary-card summary-warning">
+          <h3>Pending Connections</h3>
+          <div class="summary-list">
+            <div class="summary-item"><span>This Week</span><span class="count">{{ pending_counts.week }}</span></div>
+            <div class="summary-item"><span>This Month</span><span class="count">{{ pending_counts.month }}</span></div>
+            <div class="summary-item"><span>Overall</span><span class="count">{{ pending_counts.total }}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-3">
+        <div class="summary-card summary-info">
+          <h3>Follow Up Sent</h3>
+          <div class="summary-list">
+            <div class="summary-item"><span>This Week</span><span class="count">{{ follow_up_counts.week }}</span></div>
+            <div class="summary-item"><span>This Month</span><span class="count">{{ follow_up_counts.month }}</span></div>
+            <div class="summary-item"><span>Overall</span><span class="count">{{ follow_up_counts.total }}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+  (function () {
+    const dropdown = document.getElementById("message-dropdown");
+    const toggle = document.getElementById("message-dropdown-toggle");
+    const searchInput = document.getElementById("message-dropdown-search");
+    const hiddenInput = document.getElementById("message-id-hidden");
+    const filterForm = document.getElementById("dashboard-filter-form");
+    const userSelect = document.getElementById("dashboard-user-select");
+    const fromDateInput = filterForm ? filterForm.querySelector("input[name='from_date']") : null;
+    const toDateInput = filterForm ? filterForm.querySelector("input[name='to_date']") : null;
+    if (!dropdown || !toggle || !searchInput || !hiddenInput || !filterForm) return;
+
+    const itemButtons = dropdown.querySelectorAll("[data-message-item]");
+
+    function filterItems() {
+      const query = searchInput.value.trim().toLowerCase();
+      itemButtons.forEach(function (button) {
+        const row = button.closest("[data-item-row]");
+        const haystack = (button.getAttribute("data-search") || "").toLowerCase();
+        const matches = !query || haystack.includes(query);
+        row.classList.toggle("d-none", !matches);
+      });
+    }
+
+    searchInput.addEventListener("input", filterItems);
+
+    itemButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        const value = button.getAttribute("data-value") || "";
+        const label = button.getAttribute("data-label") || "All Message IDs";
+        hiddenInput.value = value;
+        toggle.textContent = label;
+        filterForm.requestSubmit();
+      });
+    });
+
+    [userSelect, fromDateInput, toDateInput].forEach(function (field) {
+      if (!field) return;
+      field.addEventListener("change", function () {
+        filterForm.requestSubmit();
+      });
+    });
+
+    dropdown.addEventListener("shown.bs.dropdown", function () {
+      searchInput.focus();
+      searchInput.select();
+      filterItems();
+    });
+
+    dropdown.addEventListener("hidden.bs.dropdown", function () {
+      searchInput.value = "";
+      filterItems();
+    });
+  })();
+</script>
+{% endblock %}

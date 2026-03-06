@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1 class="h3 mb-3">Follow Up Messages</h1>
+
+<div class="card dashboard-card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5 col-lg-4">
+        {{ search_form.user.label_tag }}
+        {{ search_form.user }}
+      </div>
+      <div class="col-12 col-md-5 col-lg-4">
+        {{ search_form.name.label_tag }}
+        {{ search_form.name }}
+      </div>
+      <div class="col-12 col-md-2">
+        <button type="submit" class="btn btn-outline-primary w-100">Search</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card dashboard-card">
+  <div class="card-body table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>User</th>
+          <th>Status</th>
+          <th>Follow Up Message 1</th>
+          <th>Follow Up Message 2</th>
+          <th>Follow Up Message 3</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results %}
+          <tr>
+            <td>
+              {{ row.name }}
+              <form id="followup-form-{{ row.id }}" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="connection_id" value="{{ row.id }}">
+                <input type="hidden" name="current_user" value="{{ search_form.cleaned_data.user.id|default:'' }}">
+                <input type="hidden" name="current_query" value="{{ search_form.cleaned_data.name|default:'' }}">
+              </form>
+            </td>
+            <td>{{ row.user.username }}</td>
+            <td>{{ row.connection_status.name }}</td>
+            <td><textarea name="follow_up_message_1" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_1 }}</textarea></td>
+            <td><textarea name="follow_up_message_2" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_2 }}</textarea></td>
+            <td><textarea name="follow_up_message_3" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_3 }}</textarea></td>
+            <td class="text-end"><button type="submit" class="btn btn-sm btn-primary" form="followup-form-{{ row.id }}">Update</button></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-muted">Search by user and name to update follow up messages.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

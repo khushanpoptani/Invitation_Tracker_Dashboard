@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-7 col-xl-6">
+    <div class="card dashboard-card">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-3">{{ title }}</h1>
+        <p>Are you sure you want to proceed with <strong>{{ object_name }}</strong>?</p>
+        <form method="post">
+          {% csrf_token %}
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-danger">Confirm</button>
+            <a href="{{ cancel_url }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

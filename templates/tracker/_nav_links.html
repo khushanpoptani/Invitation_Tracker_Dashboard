@@ -1,0 +1,34 @@
+{% with request.resolver_match.url_name as current_url %}
+<a class="nav-link {% if current_url == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" title="Dashboard">
+  <i class="bi bi-speedometer2 nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Dashboard</span>
+</a>
+<a class="nav-link {% if current_url == 'sent_connections_list' %}active{% endif %}" href="{% url 'sent_connections_list' %}" title="Sent Connections">
+  <i class="bi bi-send nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Sent Connections</span>
+</a>
+<a class="nav-link {% if current_url == 'message_type_list' or current_url == 'message_type_create' or current_url == 'message_type_edit' or current_url == 'message_type_delete' %}active{% endif %}" href="{% url 'message_type_list' %}" title="Message Types">
+  <i class="bi bi-chat-left-text nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Message Types</span>
+</a>
+<a class="nav-link {% if current_url == 'follow_up_message_list' %}active{% endif %}" href="{% url 'follow_up_message_list' %}" title="Follow Up Messages">
+  <i class="bi bi-chat-dots nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Follow Up Messages</span>
+</a>
+<a class="nav-link {% if current_url == 'upload_sent_connections_csv' %}active{% endif %}" href="{% url 'upload_sent_connections_csv' %}" title="Upload CSV">
+  <i class="bi bi-upload nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Upload CSV</span>
+</a>
+<a class="nav-link {% if current_url == 'update_connection_status' %}active{% endif %}" href="{% url 'update_connection_status' %}" title="Update Status">
+  <i class="bi bi-arrow-repeat nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Update Status</span>
+</a>
+<a class="nav-link {% if current_url == 'user_list' or current_url == 'user_create' or current_url == 'user_edit' or current_url == 'user_detail' or current_url == 'user_deactivate' %}active{% endif %}" href="{% url 'user_list' %}" title="Users">
+  <i class="bi bi-people nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Users</span>
+</a>
+<a class="nav-link" href="/admin/" target="_blank" rel="noopener noreferrer" title="Admin">
+  <i class="bi bi-shield-lock nav-icon" aria-hidden="true"></i>
+  <span class="nav-text">Admin</span>
+</a>
+{% endwith %}

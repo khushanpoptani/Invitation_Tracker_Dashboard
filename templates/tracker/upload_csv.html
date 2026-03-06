@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8 col-xl-7">
+    <div class="card dashboard-card">
+      <div class="card-body p-4">
+        <h1 class="h4 mb-3">{{ title }}</h1>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{% url 'download_sample_csv' %}" class="btn btn-outline-secondary">Download Sample CSV</a>
+        </div>
+        <p class="text-muted">Select the user first, then upload the CSV. Expected required headers:</p>
+        <code class="d-block mb-3">{{ sample_headers }}</code>
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
