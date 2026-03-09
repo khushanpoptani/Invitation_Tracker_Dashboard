@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -224,15 +224,111 @@ def dashboard(request):
 
 @login_required
 def sent_connections_list(request):
-    user_filter_form = UserFilterForm(request.GET or None)
-    connections = SentConnection.objects.select_related("user", "connection_status")
+    users = User.objects.filter(is_active=True).order_by("username")
+    selected_user_id = request.GET.get("user", "").strip()
+    selected_message_id = request.GET.get("message_id", "").strip()
+    selected_status_id = request.GET.get("status", "").strip()
+    selected_follow_up_count = request.GET.get("follow_up_sent_count", "").strip()
+    from_date_raw = request.GET.get("from_date", "").strip()
+    to_date_raw = request.GET.get("to_date", "").strip()
+    from_date = parse_date(from_date_raw) if from_date_raw else None
+    to_date = parse_date(to_date_raw) if to_date_raw else None
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
 
-    if user_filter_form.is_valid() and user_filter_form.cleaned_data.get("user"):
-        connections = connections.filter(user=user_filter_form.cleaned_data["user"])
+    follow_up_count_expr = (
+        Case(When(follow_up_message_1__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
+        + Case(When(follow_up_message_2__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
+        + Case(When(follow_up_message_3__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
+    )
+
+    connections = (
+        SentConnection.objects.select_related("user", "connection_status")
+        .annotate(follow_up_sent_count=follow_up_count_expr)
+    )
+
+    if selected_user_id:
+        connections = connections.filter(user_id=selected_user_id)
+
+    if selected_message_id:
+        connections = connections.filter(message_id=selected_message_id)
+
+    if selected_status_id:
+        connections = connections.filter(connection_status_id=selected_status_id)
+
+    if selected_follow_up_count != "":
+        try:
+            follow_up_count_value = int(selected_follow_up_count)
+            connections = connections.filter(follow_up_sent_count=follow_up_count_value)
+        except ValueError:
+            selected_follow_up_count = ""
+
+    if from_date:
+        connections = connections.filter(date__gte=from_date)
+    if to_date:
+        connections = connections.filter(date__lte=to_date)
+
+    message_ids_queryset = SentConnection.objects.exclude(message_id="")
+    if selected_user_id:
+        message_ids_queryset = message_ids_queryset.filter(user_id=selected_user_id)
+    message_id_options = (
+        message_ids_queryset.values_list("message_id", flat=True).distinct().order_by("message_id")
+    )
+
+    status_options = ConnectionStatus.objects.order_by("id")
+
+    if request.GET.get("download") == "1":
+        response = HttpResponse(content_type="text/csv")
+        filename = f"sent_connections_filtered_{timezone.localdate().isoformat()}.csv"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Name",
+                "Profile Link",
+                "Message",
+                "Message ID",
+                "Date",
+                "Status",
+                "Follow Up Sent Count",
+                "Follow Up 1",
+                "Follow Up 2",
+                "Follow Up 3",
+                "User",
+            ]
+        )
+
+        for row in connections.order_by("-date", "name"):
+            writer.writerow(
+                [
+                    row.name,
+                    row.profile_link,
+                    row.message,
+                    row.message_id,
+                    row.date.isoformat() if row.date else "",
+                    row.connection_status.name if row.connection_status else "",
+                    row.follow_up_sent_count,
+                    row.follow_up_message_1,
+                    row.follow_up_message_2,
+                    row.follow_up_message_3,
+                    row.user.username if row.user else "",
+                ]
+            )
+
+        return response
 
     context = {
         "connections": connections,
-        "user_filter_form": user_filter_form,
+        "users": users,
+        "message_id_options": message_id_options,
+        "status_options": status_options,
+        "selected_user_id": selected_user_id,
+        "selected_message_id": selected_message_id,
+        "selected_status_id": selected_status_id,
+        "selected_follow_up_count": selected_follow_up_count,
+        "selected_from_date": from_date.isoformat() if from_date else "",
+        "selected_to_date": to_date.isoformat() if to_date else "",
     }
     return render(request, "tracker/sent_connections_list.html", context)
 

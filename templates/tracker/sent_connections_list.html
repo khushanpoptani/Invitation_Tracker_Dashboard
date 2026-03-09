@@ -1,61 +1,251 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-  <h1 class="h3 mb-0">Sent Connections</h1>
-  <a href="{% url 'upload_sent_connections_csv' %}" class="btn btn-primary">Upload CSV</a>
-</div>
+<style>
+  .connections-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
 
-<form method="get" class="row g-2 mb-3 align-items-end">
-  <div class="col-12 col-md-5 col-lg-4">
-    {{ user_filter_form.user.label_tag }}
-    {{ user_filter_form.user }}
-  </div>
-  <div class="col-12 col-md-3 col-lg-2">
-    <button type="submit" class="btn btn-outline-primary w-100">Filter</button>
-  </div>
-</form>
+  .connections-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+  }
 
-<div class="card dashboard-card">
-  <div class="card-body table-responsive">
-    <table class="table table-striped table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Profile Link</th>
-          <th>Message</th>
-          <th>Message ID</th>
-          <th>Date</th>
-          <th>Status</th>
-          <th>Follow Up 1</th>
-          <th>Follow Up 2</th>
-          <th>Follow Up 3</th>
-          <th>User</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in connections %}
+  .connections-header h1 {
+    margin: 0;
+    font-size: clamp(1.45rem, 2.2vw, 2rem);
+  }
+
+  .connections-subtitle {
+    margin: 0.2rem 0 0;
+    color: #667790;
+    font-size: 0.95rem;
+  }
+
+  .connections-header-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .top-user-picker {
+    min-width: 250px;
+    max-width: 340px;
+  }
+
+  .filters-card .card-body {
+    padding: 1rem 1rem 1.1rem;
+  }
+
+  .filters-title {
+    font-size: 0.84rem;
+    color: #5e6d84;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+  }
+
+  .filters-hint {
+    color: #6b7c92;
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+  }
+
+  .connections-table .table {
+    margin-bottom: 0;
+    min-width: 980px;
+  }
+
+  .connections-table .message-cell {
+    max-width: 340px;
+  }
+</style>
+
+<div class="connections-page">
+  <div class="connections-header">
+    <div>
+      <h1>Sent Connections</h1>
+      <p class="connections-subtitle">Filter by user, message ID, status, and follow up count.</p>
+    </div>
+    <div class="connections-header-actions">
+      <div class="top-user-picker">
+        <label for="sent-connections-user" class="form-label mb-1">User</label>
+        <select
+          id="sent-connections-user"
+          name="user"
+          class="form-select"
+          form="sent-connections-filter-form"
+          data-auto-submit
+        >
+          <option value="" {% if not selected_user_id %}selected{% endif %}>All Users</option>
+          {% for user_obj in users %}
+            <option value="{{ user_obj.id }}" {% if selected_user_id == user_obj.id|stringformat:"s" %}selected{% endif %}>
+              {{ user_obj.get_full_name|default:user_obj.username }} (@{{ user_obj.username }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <a
+        href="{% url 'sent_connections_list' %}?{% if request.GET %}{{ request.GET.urlencode }}&{% endif %}download=1"
+        class="btn btn-outline-primary"
+      >
+        Download Filtered CSV
+      </a>
+      <a href="{% url 'upload_sent_connections_csv' %}" class="btn btn-primary">Upload CSV</a>
+    </div>
+  </div>
+
+  <form method="get" id="sent-connections-filter-form" class="card dashboard-card filters-card">
+    <div class="card-body">
+      <div class="filters-title">
+        <i class="bi bi-funnel"></i>
+        <span>Additional Filters</span>
+      </div>
+      <div class="row g-3">
+        <div class="col-12 col-md-6 col-xl-4">
+          <label for="filter-message-id" class="form-label">Message ID</label>
+          <select
+            id="filter-message-id"
+            name="message_id"
+            class="form-select"
+            data-auto-submit
+          >
+            <option value="">All Message IDs</option>
+            {% for message_id in message_id_options %}
+              <option value="{{ message_id }}" {% if selected_message_id == message_id|stringformat:"s" %}selected{% endif %}>
+                {{ message_id }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6 col-xl-2">
+          <label for="filter-status" class="form-label">Status</label>
+          <select
+            id="filter-status"
+            name="status"
+            class="form-select"
+            data-auto-submit
+          >
+            <option value="">All Statuses</option>
+            {% for status_obj in status_options %}
+              <option value="{{ status_obj.id }}" {% if selected_status_id == status_obj.id|stringformat:"s" %}selected{% endif %}>
+                {{ status_obj.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6 col-xl-2">
+          <label for="filter-follow-up-count" class="form-label">Follow Up Sent (Count)</label>
+          <select
+            id="filter-follow-up-count"
+            name="follow_up_sent_count"
+            class="form-select"
+            data-auto-submit
+          >
+            <option value="" {% if selected_follow_up_count == "" %}selected{% endif %}>All</option>
+            <option value="0" {% if selected_follow_up_count == "0" %}selected{% endif %}>0</option>
+            <option value="1" {% if selected_follow_up_count == "1" %}selected{% endif %}>1</option>
+            <option value="2" {% if selected_follow_up_count == "2" %}selected{% endif %}>2</option>
+            <option value="3" {% if selected_follow_up_count == "3" %}selected{% endif %}>3</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-6 col-xl-2">
+          <label for="filter-from-date" class="form-label">From Date</label>
+          <input
+            type="date"
+            id="filter-from-date"
+            name="from_date"
+            value="{{ selected_from_date }}"
+            class="form-control"
+            data-auto-submit
+          >
+        </div>
+        <div class="col-12 col-md-6 col-xl-2">
+          <label for="filter-to-date" class="form-label">To Date</label>
+          <input
+            type="date"
+            id="filter-to-date"
+            name="to_date"
+            value="{{ selected_to_date }}"
+            class="form-control"
+            data-auto-submit
+          >
+        </div>
+      </div>
+      <p class="filters-hint">Filters auto-apply when values are changed.</p>
+    </div>
+  </form>
+
+  <div class="card dashboard-card connections-table">
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-striped table-hover align-middle">
+        <thead>
           <tr>
-            <td>{{ row.name }}</td>
-            <td>
-              {% if row.profile_link %}
-                <a href="{{ row.profile_link }}" target="_blank">Open</a>
-              {% endif %}
-            </td>
-            <td>{{ row.message|truncatechars:60 }}</td>
-            <td>{{ row.message_id }}</td>
-            <td>{{ row.date }}</td>
-            <td>{{ row.connection_status.name }}</td>
-            <td>{{ row.follow_up_message_1|default:'-'|truncatechars:50 }}</td>
-            <td>{{ row.follow_up_message_2|default:'-'|truncatechars:50 }}</td>
-            <td>{{ row.follow_up_message_3|default:'-'|truncatechars:50 }}</td>
-            <td>{{ row.user.username }}</td>
+            <th>Name</th>
+            <th>Profile Link</th>
+            <th>Message</th>
+            <th>Message ID</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Follow Up Sent</th>
+            <th>Follow Up 1</th>
+            <th>Follow Up 2</th>
+            <th>Follow Up 3</th>
+            <th>User</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="10" class="text-center text-muted">No sent connections found.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for row in connections %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>
+                {% if row.profile_link %}
+                  <a href="{{ row.profile_link }}" target="_blank" rel="noopener">Open</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="message-cell" title="{{ row.message }}">{{ row.message|truncatechars:90 }}</td>
+              <td>{{ row.message_id|default:"-" }}</td>
+              <td>{{ row.date|date:"M d, Y" }}</td>
+              <td>{{ row.connection_status.name|default:"-" }}</td>
+              <td>{{ row.follow_up_sent_count }}</td>
+              <td>{{ row.follow_up_message_1|default:'-'|truncatechars:45 }}</td>
+              <td>{{ row.follow_up_message_2|default:'-'|truncatechars:45 }}</td>
+              <td>{{ row.follow_up_message_3|default:'-'|truncatechars:45 }}</td>
+              <td>{{ row.user.username }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="11" class="text-center text-muted py-4">No sent connections found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
+
+<script>
+  (function () {
+    const form = document.getElementById("sent-connections-filter-form");
+    if (!form) return;
+
+    const fields = document.querySelectorAll("[data-auto-submit]");
+    fields.forEach(function (field) {
+      field.addEventListener("change", function () {
+        form.requestSubmit();
+      });
+    });
+  })();
+</script>
 {% endblock %}
