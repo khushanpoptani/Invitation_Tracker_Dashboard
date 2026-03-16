@@ -37,23 +37,25 @@ class MessageType(models.Model):
 
 
 class FollowUpMessage(models.Model):
-    follow_up_message_id = models.CharField(max_length=100)
-    message = models.TextField()
+    message_id = models.CharField(max_length=100)
+    follow_up_message_1 = models.TextField(blank=True, default="")
+    follow_up_message_2 = models.TextField(blank=True, default="")
+    follow_up_message_3 = models.TextField(blank=True, default="")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="follow_up_messages")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["user__username", "follow_up_message_id"]
+        ordering = ["user__username", "message_id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["follow_up_message_id", "user"],
-                name="unique_follow_up_message_id_per_user",
+                fields=["message_id", "user"],
+                name="unique_follow_up_template_message_id_per_user",
             )
         ]
 
     def __str__(self):
-        return f"{self.follow_up_message_id} ({self.user.username})"
+        return f"{self.message_id} ({self.user.username})"
 
 
 class SentConnection(models.Model):
@@ -62,6 +64,7 @@ class SentConnection(models.Model):
     message = models.TextField(blank=True)
     message_id = models.CharField(max_length=100, blank=True)
     date = models.DateField(default=timezone.localdate)
+    status_date = models.DateField(null=True, blank=True)
     connection_status = models.ForeignKey(
         ConnectionStatus,
         on_delete=models.PROTECT,
@@ -77,6 +80,9 @@ class SentConnection(models.Model):
     follow_up_message_1 = models.TextField(blank=True, default="")
     follow_up_message_2 = models.TextField(blank=True, default="")
     follow_up_message_3 = models.TextField(blank=True, default="")
+    follow_up_sent_date_1 = models.DateField(null=True, blank=True)
+    follow_up_sent_date_2 = models.DateField(null=True, blank=True)
+    follow_up_sent_date_3 = models.DateField(null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_connections")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -18,8 +18,14 @@ class MessageTypeAdmin(admin.ModelAdmin):
 
 @admin.register(FollowUpMessage)
 class FollowUpMessageAdmin(admin.ModelAdmin):
-    list_display = ("id", "follow_up_message_id", "user", "created_at")
-    search_fields = ("follow_up_message_id", "message", "user__username")
+    list_display = ("id", "message_id", "user", "created_at")
+    search_fields = (
+        "message_id",
+        "follow_up_message_1",
+        "follow_up_message_2",
+        "follow_up_message_3",
+        "user__username",
+    )
     list_filter = ("user",)
 
 
@@ -31,7 +37,8 @@ class SentConnectionAdmin(admin.ModelAdmin):
         "user",
         "message_id",
         "date",
+        "status_date",
         "connection_status",
     )
     search_fields = ("name", "message", "message_id", "user__username")
-    list_filter = ("user", "connection_status", "date")
+    list_filter = ("user", "connection_status", "date", "status_date")

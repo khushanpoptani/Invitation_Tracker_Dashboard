@@ -35,8 +35,23 @@
             <td>{{ row.user.username }}</td>
             <td>
               <div class="d-flex justify-content-end flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#message-view-{{ row.id }}">View</button>
                 <a href="{% url 'message_type_edit' row.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                 <a href="{% url 'message_type_delete' row.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+              </div>
+              <div class="modal fade" id="message-view-{{ row.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h2 class="modal-title fs-5">Message ID {{ row.message_id }}</h2>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-2 text-muted small">User: {{ row.user.username }}</div>
+                      <textarea class="form-control" rows="10" readonly>{{ row.message }}</textarea>
+                    </div>
+                  </div>
+                </div>
               </div>
             </td>
           </tr>

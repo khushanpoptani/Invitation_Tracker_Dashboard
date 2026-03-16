@@ -15,6 +15,8 @@ from django.utils.dateparse import parse_date
 
 from .forms import (
     CSVUploadForm,
+    FollowUpTemplateBulkUploadForm,
+    FollowUpTemplateForm,
     MessageTypeCreateForm,
     MessageTypeForm,
     StatusSearchForm,
@@ -22,9 +24,248 @@ from .forms import (
     TrackerUserUpdateForm,
     UserFilterForm,
 )
-from .models import ConnectionStatus, MessageType, SentConnection
+from .models import ConnectionStatus, FollowUpMessage, MessageType, SentConnection
 
 User = get_user_model()
+NAME_PREFIXES = {
+    "mr",
+    "mr.",
+    "mrs",
+    "mrs.",
+    "ms",
+    "ms.",
+    "miss",
+    "dr",
+    "dr.",
+    "prof",
+    "prof.",
+    "sir",
+    "madam",
+    "mx",
+    "mx.",
+}
+
+
+def parse_filter_date(raw_value):
+    value = (raw_value or "").strip()
+    if not value:
+        return None
+
+    parsed = parse_date(value)
+    if parsed:
+        return parsed
+
+    for date_format in ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, date_format).date()
+        except ValueError:
+            continue
+
+    return None
+
+
+def follow_up_sent_count_expression():
+    return (
+        Case(When(follow_up_sent_date_1__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField())
+        + Case(When(follow_up_sent_date_2__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField())
+        + Case(When(follow_up_sent_date_3__isnull=False, then=Value(1)), default=Value(0), output_field=IntegerField())
+    )
+
+
+def follow_up_sent_query(start_date=None, end_date=None):
+    query = Q()
+    for field_name in ("follow_up_sent_date_1", "follow_up_sent_date_2", "follow_up_sent_date_3"):
+        field_query = Q(**{f"{field_name}__isnull": False})
+        if start_date:
+            field_query &= Q(**{f"{field_name}__gte": start_date})
+        if end_date:
+            field_query &= Q(**{f"{field_name}__lte": end_date})
+        query |= field_query
+    return query
+
+
+def status_event_date_query(start_date=None, end_date=None):
+    status_query = Q(status_date__isnull=False)
+    fallback_query = Q(status_date__isnull=True)
+    if start_date:
+        status_query &= Q(status_date__gte=start_date)
+        fallback_query &= Q(date__gte=start_date)
+    if end_date:
+        status_query &= Q(status_date__lte=end_date)
+        fallback_query &= Q(date__lte=end_date)
+    return status_query | fallback_query
+
+
+def build_message_options(connections_queryset, user=None):
+    message_ids = [
+        item["message_id"]
+        for item in connections_queryset.exclude(message_id="").values("message_id").distinct().order_by("message_id")
+    ]
+    if not message_ids:
+        return []
+
+    message_type_queryset = MessageType.objects.filter(message_id__in=message_ids)
+    if user is not None:
+        message_type_queryset = message_type_queryset.filter(user=user)
+
+    message_type_map = {}
+    for message_id, message in message_type_queryset.values_list("message_id", "message").order_by("message_id", "id"):
+        message_type_map.setdefault(message_id, message)
+
+    connection_message_map = {}
+    for message_id, message in (
+        connections_queryset.exclude(message_id="").exclude(message="").values_list("message_id", "message").order_by("message_id", "id")
+    ):
+        connection_message_map.setdefault(message_id, message)
+
+    options = []
+    for message_id in message_ids:
+        raw_message = message_type_map.get(message_id) or connection_message_map.get(message_id) or ""
+        one_line_message = " ".join(raw_message.split())
+        preview = one_line_message[:80] + ("..." if len(one_line_message) > 80 else "")
+        options.append(
+            {
+                "message_id": message_id,
+                "message_text": one_line_message,
+                "message_preview": preview,
+            }
+        )
+
+    return options
+
+
+def build_user_message_options(user):
+    if not user:
+        return []
+
+    message_ids = list(
+        {
+            message_id
+            for message_id in MessageType.objects.filter(user=user).exclude(message_id="").values_list("message_id", flat=True)
+        }
+        | {
+            message_id
+            for message_id in SentConnection.objects.filter(user=user).exclude(message_id="").values_list("message_id", flat=True)
+        }
+    )
+    message_ids.sort()
+
+    if not message_ids:
+        return []
+
+    message_type_map = {}
+    for message_id, message in MessageType.objects.filter(user=user, message_id__in=message_ids).values_list(
+        "message_id", "message"
+    ).order_by("message_id", "id"):
+        message_type_map.setdefault(message_id, message)
+
+    connection_message_map = {}
+    for message_id, message in SentConnection.objects.filter(user=user, message_id__in=message_ids).exclude(
+        message=""
+    ).values_list("message_id", "message").order_by("message_id", "id"):
+        connection_message_map.setdefault(message_id, message)
+
+    options = []
+    for message_id in message_ids:
+        raw_message = message_type_map.get(message_id) or connection_message_map.get(message_id) or ""
+        one_line_message = " ".join(raw_message.split())
+        preview = one_line_message[:80] + ("..." if len(one_line_message) > 80 else "")
+        options.append(
+            {
+                "message_id": message_id,
+                "message_text": one_line_message,
+                "message_preview": preview,
+            }
+        )
+
+    return options
+
+
+def build_selected_message_label(message_id, message_options):
+    if not message_id:
+        return "All Message IDs"
+
+    for option in message_options:
+        if option["message_id"] == message_id:
+            label = option["message_id"]
+            if option["message_preview"]:
+                label += f" - {option['message_preview']}"
+            return label
+
+    return "All Message IDs"
+
+
+def extract_follow_up_first_name(full_name):
+    tokens = [
+        token.strip(" ,.-")
+        for token in re.split(r"\s+", (full_name or "").strip())
+        if token.strip(" ,.-")
+    ]
+    tokens = [token for token in tokens if token.lower() not in NAME_PREFIXES]
+
+    if not tokens:
+        return "there"
+
+    first_candidate = tokens[0]
+    if len(first_candidate) > 3:
+        return first_candidate
+
+    last_candidate = tokens[-1]
+    if len(last_candidate) > 3:
+        return last_candidate
+
+    for token in tokens[1:]:
+        if len(token) > 3:
+            return token
+
+    return "there"
+
+
+def render_follow_up_template(template_text, full_name):
+    return (template_text or "").replace("$first_name", extract_follow_up_first_name(full_name))
+
+
+def apply_follow_up_template_to_connection(connection, template_obj, save=True):
+    updated_fields = []
+
+    if connection.follow_up_message_id != template_obj.id:
+        connection.follow_up_message = template_obj
+        updated_fields.append("follow_up_message")
+
+    template_pairs = [
+        ("follow_up_message_1", "follow_up_sent_date_1"),
+        ("follow_up_message_2", "follow_up_sent_date_2"),
+        ("follow_up_message_3", "follow_up_sent_date_3"),
+    ]
+
+    for message_field, sent_date_field in template_pairs:
+        rendered_value = render_follow_up_template(getattr(template_obj, message_field), connection.name)
+        if getattr(connection, sent_date_field) is None and getattr(connection, message_field) != rendered_value:
+            setattr(connection, message_field, rendered_value)
+            updated_fields.append(message_field)
+
+    if save and updated_fields:
+        connection.save(update_fields=updated_fields + ["updated_at"])
+
+    return updated_fields
+
+
+def sync_follow_up_template_to_connections(template_obj):
+    accepted_status = ConnectionStatus.objects.filter(name__iexact="Accepted").first()
+    if not accepted_status:
+        return 0
+
+    updated_count = 0
+    matching_connections = SentConnection.objects.filter(
+        user=template_obj.user,
+        message_id=template_obj.message_id,
+        connection_status=accepted_status,
+    )
+    for connection in matching_connections:
+        if apply_follow_up_template_to_connection(connection, template_obj, save=True):
+            updated_count += 1
+
+    return updated_count
 
 
 @login_required
@@ -38,20 +279,6 @@ def dashboard(request):
 
     if selected_user is None and users:
         selected_user = users[0]
-
-    def parse_filter_date(raw_value):
-        value = (raw_value or "").strip()
-        if not value:
-            return None
-        parsed = parse_date(value)
-        if parsed:
-            return parsed
-        for date_format in ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%m-%d-%Y"):
-            try:
-                return datetime.strptime(value, date_format).date()
-            except ValueError:
-                continue
-        return None
 
     from_date_raw = request.GET.get("from_date", "").strip()
     to_date_raw = request.GET.get("to_date", "").strip()
@@ -79,49 +306,12 @@ def dashboard(request):
     if selected_user:
         user_connections = SentConnection.objects.filter(user=selected_user)
         selected_connections = user_connections
-        message_ids = [
-            item["message_id"]
-            for item in user_connections.exclude(message_id="")
-            .values("message_id")
-            .distinct()
-            .order_by("message_id")
-        ]
-        message_type_map = {
-            row["message_id"]: row["message"]
-            for row in MessageType.objects.filter(user=selected_user, message_id__in=message_ids).values(
-                "message_id", "message"
-            )
-        }
-        connection_message_map = {}
-        for message_id, message in (
-            user_connections.exclude(message_id="")
-            .exclude(message="")
-            .values_list("message_id", "message")
-            .order_by("message_id", "id")
-        ):
-            if message_id not in connection_message_map:
-                connection_message_map[message_id] = message
-
-        for message_id in message_ids:
-            raw_message = message_type_map.get(message_id) or connection_message_map.get(message_id) or ""
-            one_line_message = " ".join(raw_message.split())
-            preview = one_line_message[:80] + ("..." if len(one_line_message) > 80 else "")
-            message_options.append(
-                {
-                    "message_id": message_id,
-                    "message_text": one_line_message,
-                    "message_preview": preview,
-                }
-            )
+        message_options = build_message_options(user_connections, user=selected_user)
+        message_ids = [option["message_id"] for option in message_options]
 
         if selected_message_id and selected_message_id in message_ids:
             selected_connections = selected_connections.filter(message_id=selected_message_id)
-            for option in message_options:
-                if option["message_id"] == selected_message_id:
-                    selected_message_label = option["message_id"]
-                    if option["message_preview"]:
-                        selected_message_label += f" - {option['message_preview']}"
-                    break
+            selected_message_label = build_selected_message_label(selected_message_id, message_options)
         else:
             selected_message_id = ""
         selected_connections_for_date = apply_date_range(selected_connections)
@@ -133,13 +323,6 @@ def dashboard(request):
 
     accepted_status = ConnectionStatus.objects.filter(name__iexact="Accepted").first()
     pending_status = ConnectionStatus.objects.filter(name__iexact="Pending").first()
-    follow_up_sent_filter = (
-        Q(follow_up_message__isnull=False)
-        | Q(follow_up_message_1__gt="")
-        | Q(follow_up_message_2__gt="")
-        | Q(follow_up_message_3__gt="")
-    )
-
     def period_counts(queryset):
         return {
             "week": queryset.filter(date__gte=week_start, date__lte=reference_end).count(),
@@ -159,17 +342,27 @@ def dashboard(request):
         if accepted_status
         else selected_connections.none()
     )
-    accepted_counts = period_counts(
-        accepted_selected_connections
+    accepted_counts = {
+        "week": accepted_selected_connections.filter(status_event_date_query(week_start, reference_end)).count(),
+        "month": accepted_selected_connections.filter(status_event_date_query(month_start, reference_end)).count(),
+        "total": accepted_selected_connections.count(),
+    }
+    filtered_accepted_count = (
+        accepted_selected_connections.filter(status_event_date_query(from_date, to_date)).count()
+        if has_date_filter
+        else accepted_selected_connections.count()
     )
-    filtered_accepted_count = date_filter_count(accepted_selected_connections)
 
     accepted_user_connections = (
         user_connections.filter(connection_status=accepted_status)
         if accepted_status
         else user_connections.none()
     )
-    global_accepted_counts = period_counts(accepted_user_connections)
+    global_accepted_counts = {
+        "week": accepted_user_connections.filter(status_event_date_query(week_start, reference_end)).count(),
+        "month": accepted_user_connections.filter(status_event_date_query(month_start, reference_end)).count(),
+        "total": accepted_user_connections.count(),
+    }
 
     pending_selected_connections = (
         selected_connections.filter(connection_status=pending_status)
@@ -181,12 +374,22 @@ def dashboard(request):
     )
     filtered_pending_count = date_filter_count(pending_selected_connections)
 
-    follow_up_selected_connections = selected_connections.filter(follow_up_sent_filter)
-    follow_up_counts = period_counts(follow_up_selected_connections)
-    filtered_follow_up_count = date_filter_count(follow_up_selected_connections)
+    follow_up_counts = {
+        "week": selected_connections.filter(follow_up_sent_query(week_start, reference_end)).count(),
+        "month": selected_connections.filter(follow_up_sent_query(month_start, reference_end)).count(),
+        "total": selected_connections.filter(follow_up_sent_query()).count(),
+    }
+    filtered_follow_up_count = (
+        selected_connections.filter(follow_up_sent_query(from_date, to_date)).count()
+        if has_date_filter
+        else selected_connections.filter(follow_up_sent_query()).count()
+    )
 
-    follow_up_user_connections = user_connections.filter(follow_up_sent_filter)
-    global_follow_up_counts = period_counts(follow_up_user_connections)
+    global_follow_up_counts = {
+        "week": user_connections.filter(follow_up_sent_query(week_start, reference_end)).count(),
+        "month": user_connections.filter(follow_up_sent_query(month_start, reference_end)).count(),
+        "total": user_connections.filter(follow_up_sent_query()).count(),
+    }
 
     if has_date_filter:
         date_filter_label = "Date Filter"
@@ -229,26 +432,26 @@ def sent_connections_list(request):
     selected_message_id = request.GET.get("message_id", "").strip()
     selected_status_id = request.GET.get("status", "").strip()
     selected_follow_up_count = request.GET.get("follow_up_sent_count", "").strip()
+    search_query = request.GET.get("search", "").strip()
     from_date_raw = request.GET.get("from_date", "").strip()
     to_date_raw = request.GET.get("to_date", "").strip()
-    from_date = parse_date(from_date_raw) if from_date_raw else None
-    to_date = parse_date(to_date_raw) if to_date_raw else None
+    from_date = parse_filter_date(from_date_raw)
+    to_date = parse_filter_date(to_date_raw)
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
 
-    follow_up_count_expr = (
-        Case(When(follow_up_message_1__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
-        + Case(When(follow_up_message_2__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
-        + Case(When(follow_up_message_3__gt="", then=Value(1)), default=Value(0), output_field=IntegerField())
-    )
-
     connections = (
         SentConnection.objects.select_related("user", "connection_status")
-        .annotate(follow_up_sent_count=follow_up_count_expr)
+        .annotate(follow_up_sent_count=follow_up_sent_count_expression())
     )
 
     if selected_user_id:
         connections = connections.filter(user_id=selected_user_id)
+
+    base_connections = connections
+    message_options = build_message_options(base_connections)
+    if selected_message_id and not any(option["message_id"] == selected_message_id for option in message_options):
+        selected_message_id = ""
 
     if selected_message_id:
         connections = connections.filter(message_id=selected_message_id)
@@ -263,19 +466,24 @@ def sent_connections_list(request):
         except ValueError:
             selected_follow_up_count = ""
 
+    if search_query:
+        connections = connections.filter(
+            Q(name__icontains=search_query)
+            | Q(profile_link__icontains=search_query)
+            | Q(message__icontains=search_query)
+            | Q(message_id__icontains=search_query)
+            | Q(user__username__icontains=search_query)
+            | Q(user__first_name__icontains=search_query)
+            | Q(user__last_name__icontains=search_query)
+        )
+
     if from_date:
         connections = connections.filter(date__gte=from_date)
     if to_date:
         connections = connections.filter(date__lte=to_date)
 
-    message_ids_queryset = SentConnection.objects.exclude(message_id="")
-    if selected_user_id:
-        message_ids_queryset = message_ids_queryset.filter(user_id=selected_user_id)
-    message_id_options = (
-        message_ids_queryset.values_list("message_id", flat=True).distinct().order_by("message_id")
-    )
-
     status_options = ConnectionStatus.objects.order_by("id")
+    selected_message_label = build_selected_message_label(selected_message_id, message_options)
 
     if request.GET.get("download") == "1":
         response = HttpResponse(content_type="text/csv")
@@ -290,11 +498,15 @@ def sent_connections_list(request):
                 "Message",
                 "Message ID",
                 "Date",
+                "Status Date",
                 "Status",
                 "Follow Up Sent Count",
                 "Follow Up 1",
                 "Follow Up 2",
                 "Follow Up 3",
+                "Follow Up Sent Date 1",
+                "Follow Up Sent Date 2",
+                "Follow Up Sent Date 3",
                 "User",
             ]
         )
@@ -307,11 +519,15 @@ def sent_connections_list(request):
                     row.message,
                     row.message_id,
                     row.date.isoformat() if row.date else "",
+                    row.status_date.isoformat() if row.status_date else "",
                     row.connection_status.name if row.connection_status else "",
                     row.follow_up_sent_count,
                     row.follow_up_message_1,
                     row.follow_up_message_2,
                     row.follow_up_message_3,
+                    row.follow_up_sent_date_1.isoformat() if row.follow_up_sent_date_1 else "",
+                    row.follow_up_sent_date_2.isoformat() if row.follow_up_sent_date_2 else "",
+                    row.follow_up_sent_date_3.isoformat() if row.follow_up_sent_date_3 else "",
                     row.user.username if row.user else "",
                 ]
             )
@@ -321,12 +537,14 @@ def sent_connections_list(request):
     context = {
         "connections": connections,
         "users": users,
-        "message_id_options": message_id_options,
+        "message_options": message_options,
         "status_options": status_options,
         "selected_user_id": selected_user_id,
         "selected_message_id": selected_message_id,
+        "selected_message_label": selected_message_label,
         "selected_status_id": selected_status_id,
         "selected_follow_up_count": selected_follow_up_count,
+        "selected_search_query": search_query,
         "selected_from_date": from_date.isoformat() if from_date else "",
         "selected_to_date": to_date.isoformat() if to_date else "",
     }
@@ -454,51 +672,189 @@ def message_type_delete(request, pk):
 
 @login_required
 def follow_up_message_list(request):
-    results = SentConnection.objects.none()
+    users = list(User.objects.filter(is_active=True).order_by("username"))
+    selected_user_id = request.GET.get("user", "").strip()
+    search_query = request.GET.get("search", "").strip()
 
-    if request.method == "POST" and request.POST.get("connection_id"):
-        connection = get_object_or_404(SentConnection, pk=request.POST.get("connection_id"))
-        connection.follow_up_message_1 = request.POST.get("follow_up_message_1", "").strip()
-        connection.follow_up_message_2 = request.POST.get("follow_up_message_2", "").strip()
-        connection.follow_up_message_3 = request.POST.get("follow_up_message_3", "").strip()
-        connection.save(
-            update_fields=[
-                "follow_up_message_1",
-                "follow_up_message_2",
-                "follow_up_message_3",
-                "updated_at",
-            ]
-        )
-        messages.success(request, f"Follow up messages updated for {connection.name}.")
+    if not selected_user_id and users:
+        selected_user_id = str(users[0].id)
 
+    selected_user = next((user for user in users if str(user.id) == selected_user_id), None)
+    create_form = FollowUpTemplateForm(initial={"user": selected_user} if selected_user else None)
+    bulk_upload_form = FollowUpTemplateBulkUploadForm(initial={"user": selected_user} if selected_user else None)
+    template_message_options = build_user_message_options(selected_user)
+    selected_template_message_id = (
+        (create_form["message_id"].value() if "message_id" in create_form.fields else "") if create_form else ""
+    )
+    selected_template_message_label = (
+        build_selected_message_label(selected_template_message_id, template_message_options)
+        if selected_template_message_id
+        else "Select Message ID"
+    )
+
+    def redirect_with_filters(user_id="", search=""):
         params = {}
-        current_user = request.POST.get("current_user", "")
-        current_query = request.POST.get("current_query", "")
-        if current_user:
-            params["user"] = current_user
-        if current_query:
-            params["name"] = current_query
+        if user_id:
+            params["user"] = user_id
+        if search:
+            params["search"] = search
 
         redirect_url = reverse("follow_up_message_list")
         if params:
             redirect_url += f"?{urlencode(params)}"
         return HttpResponseRedirect(redirect_url)
 
-    search_form = StatusSearchForm(request.GET or None)
-    if search_form.is_valid():
-        user = search_form.cleaned_data["user"]
-        name = search_form.cleaned_data["name"]
-        results = SentConnection.objects.filter(
-            user=user,
-            name__icontains=name,
-        ).select_related("connection_status", "user")
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip()
+        current_user = request.POST.get("current_user", selected_user_id)
+        current_search = request.POST.get("current_search", search_query)
+
+        if action == "create":
+            create_form = FollowUpTemplateForm(request.POST)
+            selected_template_message_id = request.POST.get("message_id", "").strip()
+            selected_template_message_label = (
+                build_selected_message_label(selected_template_message_id, template_message_options)
+                if selected_template_message_id
+                else "Select Message ID"
+            )
+            if create_form.is_valid():
+                template_obj = create_form.save()
+                updated_count = sync_follow_up_template_to_connections(template_obj)
+                success_message = f"Follow up template created for Message ID {template_obj.message_id}."
+                if updated_count:
+                    success_message += f" Updated {updated_count} accepted connection(s)."
+                messages.success(request, success_message)
+                return redirect_with_filters(str(template_obj.user_id), current_search)
+            messages.error(request, "Could not create follow up template. Check the fields and try again.")
+
+        elif action == "update":
+            template_obj = get_object_or_404(FollowUpMessage, pk=request.POST.get("template_id"))
+            updated_user = User.objects.filter(pk=request.POST.get("user", ""), is_active=True).first()
+            updated_message_id = request.POST.get("message_id", "").strip()
+            template_obj.follow_up_message_1 = request.POST.get("follow_up_message_1", "").strip()
+            template_obj.follow_up_message_2 = request.POST.get("follow_up_message_2", "").strip()
+            template_obj.follow_up_message_3 = request.POST.get("follow_up_message_3", "").strip()
+
+            if not updated_user or not updated_message_id:
+                messages.error(request, "User and Message ID are required to update a follow up template.")
+                return redirect_with_filters(current_user, current_search)
+
+            duplicate_exists = FollowUpMessage.objects.filter(user=updated_user, message_id=updated_message_id).exclude(
+                pk=template_obj.pk
+            )
+            if duplicate_exists.exists():
+                messages.error(request, "That Message ID already has follow up messages for the selected user.")
+                return redirect_with_filters(current_user, current_search)
+
+            template_obj.user = updated_user
+            template_obj.message_id = updated_message_id
+            template_obj.save()
+            updated_count = sync_follow_up_template_to_connections(template_obj)
+            success_message = f"Follow up template updated for Message ID {template_obj.message_id}."
+            if updated_count:
+                success_message += f" Updated {updated_count} accepted connection(s)."
+            messages.success(request, success_message)
+            return redirect_with_filters(str(template_obj.user_id), current_search)
+
+        elif action == "delete":
+            template_obj = get_object_or_404(FollowUpMessage, pk=request.POST.get("template_id"))
+            template_user_id = str(template_obj.user_id)
+            template_message_id = template_obj.message_id
+            template_obj.delete()
+            messages.success(request, f"Follow up template deleted for Message ID {template_message_id}.")
+            return redirect_with_filters(template_user_id, current_search)
+
+        elif action == "bulk_upload":
+            bulk_upload_form = FollowUpTemplateBulkUploadForm(request.POST, request.FILES)
+            if bulk_upload_form.is_valid():
+                csv_file = bulk_upload_form.cleaned_data["csv_file"]
+                user = bulk_upload_form.cleaned_data["user"]
+
+                try:
+                    decoded = csv_file.read().decode("utf-8-sig").splitlines()
+                    reader = csv.DictReader(decoded)
+                except UnicodeDecodeError:
+                    messages.error(request, "CSV must be UTF-8 encoded.")
+                    return redirect_with_filters(str(user.id), current_search)
+
+                if not reader.fieldnames:
+                    messages.error(request, "CSV header row is missing.")
+                    return redirect_with_filters(str(user.id), current_search)
+
+                normalized_headers = {
+                    field.strip().lower().replace(" ", "_")
+                    for field in reader.fieldnames
+                    if field
+                }
+                required_columns = {"message_id"}
+                if not required_columns.issubset(normalized_headers):
+                    messages.error(request, "CSV must contain at least the `message_id` column.")
+                    return redirect_with_filters(str(user.id), current_search)
+
+                created_count = 0
+                updated_count = 0
+                failed_rows = []
+
+                for line_number, row in enumerate(reader, start=2):
+                    normalized = {
+                        k.strip().lower().replace(" ", "_"): (v or "").strip()
+                        for k, v in row.items()
+                        if k
+                    }
+                    message_id = normalized.get("message_id", "")
+                    if not message_id:
+                        failed_rows.append(f"Row {line_number}: message_id is required")
+                        continue
+
+                    template_obj, created = FollowUpMessage.objects.update_or_create(
+                        user=user,
+                        message_id=message_id,
+                        defaults={
+                            "follow_up_message_1": normalized.get("follow_up_message_1", ""),
+                            "follow_up_message_2": normalized.get("follow_up_message_2", ""),
+                            "follow_up_message_3": normalized.get("follow_up_message_3", ""),
+                        },
+                    )
+                    sync_follow_up_template_to_connections(template_obj)
+                    created_count += int(created)
+                    updated_count += int(not created)
+
+                if created_count or updated_count:
+                    messages.success(
+                        request,
+                        f"Bulk upload complete. Created {created_count} template(s) and updated {updated_count} template(s).",
+                    )
+                if failed_rows:
+                    messages.warning(request, "Some rows failed: " + " | ".join(failed_rows[:5]))
+                return redirect_with_filters(str(user.id), current_search)
+
+            messages.error(request, "Could not upload follow up templates. Check the file and try again.")
+
+    templates = FollowUpMessage.objects.select_related("user")
+    if selected_user:
+        templates = templates.filter(user=selected_user)
+    if search_query:
+        templates = templates.filter(
+            Q(message_id__icontains=search_query)
+            | Q(follow_up_message_1__icontains=search_query)
+            | Q(follow_up_message_2__icontains=search_query)
+            | Q(follow_up_message_3__icontains=search_query)
+        )
 
     return render(
         request,
         "tracker/follow_up_message_list.html",
         {
-            "search_form": search_form,
-            "results": results,
+            "users": users,
+            "selected_user": selected_user,
+            "selected_user_id": selected_user_id,
+            "selected_search_query": search_query,
+            "templates": templates,
+            "create_form": create_form,
+            "bulk_upload_form": bulk_upload_form,
+            "template_message_options": template_message_options,
+            "selected_template_message_id": selected_template_message_id,
+            "selected_template_message_label": selected_template_message_label,
         },
     )
 
@@ -520,18 +876,6 @@ def _parse_csv_date(raw_date):
 
     return None
 
-
-def _pick_follow_up_message(normalized_row, index):
-    key_options = [
-        f"follow_up_message_{index}",
-        f"follow_up_message{index}",
-    ]
-    for key in key_options:
-        if key in normalized_row:
-            return normalized_row[key]
-    return ""
-
-
 @login_required
 def download_sample_csv(request):
     response = HttpResponse(content_type="text/csv")
@@ -545,9 +889,6 @@ def download_sample_csv(request):
             "message",
             "message_id",
             "date",
-            "follow_up_message_1",
-            "follow_up_message_2",
-            "follow_up_message_3",
         ]
     )
     writer.writerow(
@@ -557,9 +898,31 @@ def download_sample_csv(request):
             "Hi John, I'd like to connect.",
             "MSG001",
             "2026-02-27",
-            "Following up on my connection request.",
-            "Second reminder to connect.",
-            "Final follow up message.",
+        ]
+    )
+    return response
+
+
+@login_required
+def download_follow_up_template_sample_csv(request):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="sample_follow_up_templates.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(
+        [
+            "message_id",
+            "follow_up_message_1",
+            "follow_up_message_2",
+            "follow_up_message_3",
+        ]
+    )
+    writer.writerow(
+        [
+            "MSG001",
+            "Hi $first_name, just following up on my previous message.",
+            "Checking in again, $first_name. Happy to connect if useful.",
+            "Final follow up, $first_name. Let me know if this is relevant.",
         ]
     )
     return response
@@ -630,9 +993,6 @@ def upload_sent_connections_csv(request):
                 date=parsed_date,
                 connection_status=pending_status,
                 follow_up_message=None,
-                follow_up_message_1=_pick_follow_up_message(normalized, 1),
-                follow_up_message_2=_pick_follow_up_message(normalized, 2),
-                follow_up_message_3=_pick_follow_up_message(normalized, 3),
                 user=user,
             )
             created_count += 1
@@ -654,7 +1014,7 @@ def upload_sent_connections_csv(request):
         {
             "form": form,
             "title": "Upload Sent Connections CSV",
-            "sample_headers": "name,profile_link,message,message_id,date (+ optional follow_up_message_1, follow_up_message_2, follow_up_message_3)",
+            "sample_headers": "name,profile_link,message,message_id,date",
         },
     )
 
@@ -669,12 +1029,31 @@ def update_connection_status(request):
     if request.method == "POST" and request.POST.get("connection_id"):
         connection_id = request.POST.get("connection_id")
         status_id = request.POST.get("status_id")
+        status_date = parse_filter_date(request.POST.get("status_date")) or timezone.localdate()
 
         connection = get_object_or_404(SentConnection, pk=connection_id)
         status = get_object_or_404(ConnectionStatus, pk=status_id)
         connection.connection_status = status
-        connection.save(update_fields=["connection_status", "updated_at"])
-        messages.success(request, f"Status updated to {status.name} for {connection.name}.")
+        connection.status_date = status_date
+
+        update_fields = ["connection_status", "status_date", "updated_at"]
+        follow_up_message = (
+            FollowUpMessage.objects.filter(user=connection.user, message_id=connection.message_id).first()
+            if status.name.lower() == "accepted"
+            else None
+        )
+        if follow_up_message:
+            apply_follow_up_template_to_connection(connection, follow_up_message, save=False)
+            update_fields.extend(["follow_up_message", "follow_up_message_1", "follow_up_message_2", "follow_up_message_3"])
+
+        connection.save(update_fields=list(dict.fromkeys(update_fields)))
+
+        status_message = f"Status updated to {status.name} for {connection.name}."
+        if status.name.lower() == "accepted" and follow_up_message:
+            status_message += " Follow up messages were generated automatically."
+        elif status.name.lower() == "accepted":
+            status_message += " No follow up template was found for this Message ID."
+        messages.success(request, status_message)
 
         params = {}
         user_id = request.POST.get("current_user", "")
@@ -705,6 +1084,140 @@ def update_connection_status(request):
             "search_form": search_form,
             "results": results,
             "statuses": statuses,
+            "today": timezone.localdate().isoformat(),
+        },
+    )
+
+
+@login_required
+def follow_up_hub(request):
+    users = list(User.objects.filter(is_active=True).order_by("username"))
+    selected_user_id = request.GET.get("user", "").strip()
+    search_query = request.GET.get("search", "").strip()
+    selected_follow_up_count = request.GET.get("follow_up_sent_count", "").strip()
+    from_date = parse_filter_date(request.GET.get("from_date", ""))
+    to_date = parse_filter_date(request.GET.get("to_date", ""))
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    if not selected_user_id and users:
+        selected_user_id = str(users[0].id)
+
+    def redirect_with_filters(params_override=None):
+        params = {
+            "user": request.POST.get("current_user", selected_user_id),
+            "search": request.POST.get("current_search", search_query),
+            "follow_up_sent_count": request.POST.get("current_follow_up_sent_count", selected_follow_up_count),
+            "from_date": request.POST.get("current_from_date", from_date.isoformat() if from_date else ""),
+            "to_date": request.POST.get("current_to_date", to_date.isoformat() if to_date else ""),
+        }
+        if params_override:
+            params.update(params_override)
+
+        filtered_params = {key: value for key, value in params.items() if value}
+        redirect_url = reverse("follow_up_hub")
+        if filtered_params:
+            redirect_url += f"?{urlencode(filtered_params)}"
+        return HttpResponseRedirect(redirect_url)
+
+    if request.method == "POST" and request.POST.get("action") == "mark_sent":
+        connection = get_object_or_404(SentConnection, pk=request.POST.get("connection_id"))
+        follow_up_index = request.POST.get("follow_up_index", "").strip()
+        if follow_up_index not in {"1", "2", "3"}:
+            messages.error(request, "Invalid follow up selection.")
+            return redirect_with_filters()
+
+        sent_date = parse_filter_date(request.POST.get("sent_date")) or timezone.localdate()
+        field_name = f"follow_up_sent_date_{follow_up_index}"
+        setattr(connection, field_name, sent_date)
+        connection.save(update_fields=[field_name, "updated_at"])
+        messages.success(request, f"Follow up {follow_up_index} marked as sent for {connection.name}.")
+        return redirect_with_filters()
+
+    accepted_status = ConnectionStatus.objects.filter(name__iexact="Accepted").first()
+    connections = (
+        SentConnection.objects.select_related("user", "connection_status")
+        .annotate(follow_up_sent_count=follow_up_sent_count_expression())
+        .filter(connection_status=accepted_status)
+        if accepted_status
+        else SentConnection.objects.none()
+    )
+
+    if selected_user_id:
+        connections = connections.filter(user_id=selected_user_id)
+
+    if search_query:
+        connections = connections.filter(
+            Q(name__icontains=search_query)
+            | Q(profile_link__icontains=search_query)
+            | Q(message__icontains=search_query)
+            | Q(message_id__icontains=search_query)
+        )
+
+    if selected_follow_up_count != "":
+        try:
+            follow_up_count_value = 0 if selected_follow_up_count == "none" else int(selected_follow_up_count)
+            connections = connections.filter(follow_up_sent_count=follow_up_count_value)
+        except ValueError:
+            selected_follow_up_count = ""
+
+    if from_date:
+        connections = connections.filter(Q(status_date__gte=from_date) | (Q(status_date__isnull=True) & Q(date__gte=from_date)))
+    if to_date:
+        connections = connections.filter(Q(status_date__lte=to_date) | (Q(status_date__isnull=True) & Q(date__lte=to_date)))
+
+    connections = connections.order_by("-status_date", "-date", "-id")
+
+    if request.GET.get("download") == "1":
+        response = HttpResponse(content_type="text/csv")
+        filename = f"follow_ups_filtered_{timezone.localdate().isoformat()}.csv"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Name",
+                "User",
+                "Message ID",
+                "Accepted Date",
+                "Follow Up Sent Count",
+                "Follow Up 1",
+                "Follow Up Sent Date 1",
+                "Follow Up 2",
+                "Follow Up Sent Date 2",
+                "Follow Up 3",
+                "Follow Up Sent Date 3",
+            ]
+        )
+        for row in connections:
+            writer.writerow(
+                [
+                    row.name,
+                    row.user.username,
+                    row.message_id,
+                    row.status_date.isoformat() if row.status_date else (row.date.isoformat() if row.date else ""),
+                    row.follow_up_sent_count,
+                    row.follow_up_message_1,
+                    row.follow_up_sent_date_1.isoformat() if row.follow_up_sent_date_1 else "",
+                    row.follow_up_message_2,
+                    row.follow_up_sent_date_2.isoformat() if row.follow_up_sent_date_2 else "",
+                    row.follow_up_message_3,
+                    row.follow_up_sent_date_3.isoformat() if row.follow_up_sent_date_3 else "",
+                ]
+            )
+        return response
+
+    return render(
+        request,
+        "tracker/follow_up_hub.html",
+        {
+            "users": users,
+            "connections": connections,
+            "selected_user_id": selected_user_id,
+            "selected_search_query": search_query,
+            "selected_follow_up_count": selected_follow_up_count,
+            "selected_from_date": from_date.isoformat() if from_date else "",
+            "selected_to_date": to_date.isoformat() if to_date else "",
+            "today": timezone.localdate().isoformat(),
         },
     )
 

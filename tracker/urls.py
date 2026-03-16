@@ -11,6 +11,12 @@ urlpatterns = [
     path("message-types/<int:pk>/edit/", views.message_type_edit, name="message_type_edit"),
     path("message-types/<int:pk>/delete/", views.message_type_delete, name="message_type_delete"),
     path("follow-up-messages/", views.follow_up_message_list, name="follow_up_message_list"),
+    path("follow-ups/", views.follow_up_hub, name="follow_up_hub"),
+    path(
+        "follow-up-messages/sample/",
+        views.download_follow_up_template_sample_csv,
+        name="download_follow_up_template_sample_csv",
+    ),
     path("upload-csv/sample/", views.download_sample_csv, name="download_sample_csv"),
     path("upload-csv/", views.upload_sent_connections_csv, name="upload_sent_connections_csv"),
     path("update-status/", views.update_connection_status, name="update_connection_status"),

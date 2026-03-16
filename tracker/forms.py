@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
-from .models import MessageType
+from .models import FollowUpMessage, MessageType
 
 User = get_user_model()
 
@@ -46,6 +46,26 @@ class MessageTypeCreateForm(BootstrapFormMixin, forms.ModelForm):
 
 class CSVUploadForm(BootstrapFormMixin, forms.Form):
     user = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=True)
+    csv_file = forms.FileField(required=True)
+
+
+class FollowUpTemplateForm(BootstrapFormMixin, forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["user"].queryset = User.objects.filter(is_active=True).order_by("username")
+
+    class Meta:
+        model = FollowUpMessage
+        fields = ["user", "message_id", "follow_up_message_1", "follow_up_message_2", "follow_up_message_3"]
+        widgets = {
+            "follow_up_message_1": forms.Textarea(attrs={"rows": 3}),
+            "follow_up_message_2": forms.Textarea(attrs={"rows": 3}),
+            "follow_up_message_3": forms.Textarea(attrs={"rows": 3}),
+        }
+
+
+class FollowUpTemplateBulkUploadForm(BootstrapFormMixin, forms.Form):
+    user = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True).order_by("username"), required=True)
     csv_file = forms.FileField(required=True)
 
 

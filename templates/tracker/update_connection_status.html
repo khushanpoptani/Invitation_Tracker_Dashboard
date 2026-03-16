@@ -29,31 +29,38 @@
           <th>Name</th>
           <th>User</th>
           <th>Current Status</th>
-          <th>Date</th>
+          <th>Status Date</th>
           <th class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for row in results %}
-          <tr>
-            <td>{{ row.name }}</td>
-            <td>{{ row.user.username }}</td>
-            <td>{{ row.connection_status.name }}</td>
-            <td>{{ row.date }}</td>
-            <td class="text-end">
-              <div class="d-flex justify-content-end flex-wrap gap-2">
-                {% for status in statuses %}
-                  <form method="post" class="d-inline">
-                    {% csrf_token %}
-                    <input type="hidden" name="connection_id" value="{{ row.id }}">
-                    <input type="hidden" name="status_id" value="{{ status.id }}">
-                    <input type="hidden" name="current_user" value="{{ search_form.cleaned_data.user.id|default:'' }}">
-                    <input type="hidden" name="current_query" value="{{ search_form.cleaned_data.name|default:'' }}">
-                    <button type="submit" class="btn btn-sm {% if status.name|lower == 'accepted' %}btn-success{% elif status.name|lower == 'rejected' %}btn-danger{% else %}btn-secondary{% endif %}">{{ status.name }}</button>
-                  </form>
-                {% endfor %}
-              </div>
-            </td>
+          {% for row in results %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>{{ row.user.username }}</td>
+              <td>{{ row.connection_status.name }}</td>
+              <td>
+                <form method="post" class="d-flex justify-content-end flex-wrap gap-2" id="status-form-{{ row.id }}">
+                  {% csrf_token %}
+                  <input type="hidden" name="connection_id" value="{{ row.id }}">
+                  <input type="hidden" name="current_user" value="{{ search_form.cleaned_data.user.id|default:'' }}">
+                  <input type="hidden" name="current_query" value="{{ search_form.cleaned_data.name|default:'' }}">
+                  <input
+                    type="date"
+                    name="status_date"
+                    value="{{ row.status_date|date:'Y-m-d'|default:today }}"
+                    class="form-control form-control-sm"
+                    style="min-width: 150px;"
+                  >
+                </form>
+              </td>
+              <td class="text-end">
+                <div class="d-flex justify-content-end flex-wrap gap-2">
+                  {% for status in statuses %}
+                    <button type="submit" name="status_id" value="{{ status.id }}" class="btn btn-sm {% if status.name|lower == 'accepted' %}btn-success{% elif status.name|lower == 'rejected' %}btn-danger{% else %}btn-secondary{% endif %}" form="status-form-{{ row.id }}">{{ status.name }}</button>
+                  {% endfor %}
+                </div>
+              </td>
           </tr>
         {% empty %}
           <tr><td colspan="5" class="text-center text-muted">Search by user and name to update status.</td></tr>

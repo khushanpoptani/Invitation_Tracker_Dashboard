@@ -1,64 +1,447 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1 class="h3 mb-3">Follow Up Messages</h1>
+<style>
+  .template-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
 
-<div class="card dashboard-card mb-4">
-  <div class="card-body">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-12 col-md-5 col-lg-4">
-        {{ search_form.user.label_tag }}
-        {{ search_form.user }}
+  .template-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .template-subtitle {
+    margin: 0.2rem 0 0;
+    color: #677992;
+  }
+
+  .template-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .template-user-picker {
+    min-width: 250px;
+  }
+
+  .template-filter-card .card-body,
+  .template-section-card .card-body {
+    padding: 1rem 1rem 1.1rem;
+  }
+
+  .template-section-title {
+    font-size: 0.84rem;
+    color: #5f6f86;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .template-table .table {
+    margin-bottom: 0;
+    min-width: 960px;
+  }
+
+  #template-message-dropdown-toggle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 2rem;
+  }
+
+  .message-dropdown-menu {
+    max-height: 22rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .message-dropdown-item {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.25rem;
+  }
+
+  .message-dropdown-item .message-item-id {
+    font-weight: 700;
+  }
+
+  .message-dropdown-item .message-item-text {
+    display: block;
+    font-size: 0.84rem;
+    color: #5f6b78;
+    margin-top: 0.1rem;
+  }
+</style>
+
+<div class="template-page">
+  <div class="template-header">
+    <div>
+      <h1 class="h3 mb-0">Follow Up Templates</h1>
+      <p class="template-subtitle">Manage up to three follow up messages for each Message ID. Use <code>$first_name</code> as a placeholder.</p>
+    </div>
+    <div class="template-actions">
+      <div class="template-user-picker">
+        <label for="template-user-filter" class="form-label mb-1">User</label>
+        <select
+          id="template-user-filter"
+          name="user"
+          class="form-select"
+          form="template-filter-form"
+          data-auto-submit
+        >
+          {% for user_obj in users %}
+            <option value="{{ user_obj.id }}" {% if selected_user_id == user_obj.id|stringformat:"s" %}selected{% endif %}>
+              {{ user_obj.get_full_name|default:user_obj.username }} (@{{ user_obj.username }})
+            </option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="col-12 col-md-5 col-lg-4">
-        {{ search_form.name.label_tag }}
-        {{ search_form.name }}
-      </div>
-      <div class="col-12 col-md-2">
-        <button type="submit" class="btn btn-outline-primary w-100">Search</button>
-      </div>
-    </form>
+    </div>
   </div>
-</div>
 
-<div class="card dashboard-card">
-  <div class="card-body table-responsive">
-    <table class="table table-striped align-middle">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>User</th>
-          <th>Status</th>
-          <th>Follow Up Message 1</th>
-          <th>Follow Up Message 2</th>
-          <th>Follow Up Message 3</th>
-          <th class="text-end">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in results %}
+  <form method="get" id="template-filter-form" class="card dashboard-card template-filter-card">
+    <div class="card-body">
+      <div class="template-section-title">
+        <i class="bi bi-funnel"></i>
+        <span>Filters</span>
+      </div>
+      <div class="row g-3">
+        <div class="col-12 col-lg-6">
+          <label for="template-search" class="form-label">Search</label>
+          <input
+            type="text"
+            id="template-search"
+            name="search"
+            value="{{ selected_search_query }}"
+            class="form-control"
+            placeholder="Search Message ID or follow up text"
+            data-auto-submit-text
+          >
+        </div>
+      </div>
+      <p class="text-muted small mb-0 mt-3">Filters apply automatically when user or search text changes.</p>
+    </div>
+  </form>
+
+  {% if selected_user %}
+    <div class="row g-3">
+      <div class="col-12 col-xl-7">
+        <div class="card dashboard-card template-section-card h-100">
+          <div class="card-body">
+            <div class="template-section-title">
+              <i class="bi bi-plus-square"></i>
+              <span>Add Template</span>
+            </div>
+            {% if create_form.non_field_errors %}
+              <div class="alert alert-danger py-2">{{ create_form.non_field_errors }}</div>
+            {% endif %}
+            <form method="post" class="row g-3">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="create">
+              <input type="hidden" name="current_user" value="{{ selected_user_id }}">
+              <input type="hidden" name="current_search" value="{{ selected_search_query }}">
+              <input type="hidden" name="user" value="{{ selected_user_id }}">
+              <div class="col-12 col-md-4">
+                <label class="form-label">User</label>
+                <input type="text" class="form-control" value="{{ selected_user.get_full_name|default:selected_user.username }} (@{{ selected_user.username }})" readonly>
+              </div>
+              <div class="col-12 col-md-8">
+                <label for="template-message-dropdown-toggle" class="form-label">Message ID</label>
+                <input type="hidden" name="message_id" id="template-message-id-hidden" value="{{ selected_template_message_id }}">
+                <div class="dropdown w-100" id="template-message-dropdown">
+                  <button
+                    class="btn btn-outline-secondary dropdown-toggle w-100 text-start"
+                    type="button"
+                    id="template-message-dropdown-toggle"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                  >
+                    {{ selected_template_message_label }}
+                  </button>
+                  <ul class="dropdown-menu w-100 p-2 message-dropdown-menu" aria-labelledby="template-message-dropdown-toggle">
+                    <li>
+                      <input
+                        id="template-message-dropdown-search"
+                        type="text"
+                        class="form-control form-control-sm"
+                        placeholder="Search message text or ID"
+                      >
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% for option in template_message_options %}
+                      <li data-item-row>
+                        <button
+                          type="button"
+                          class="dropdown-item message-dropdown-item"
+                          data-message-item
+                          data-value="{{ option.message_id }}"
+                          data-label="{{ option.message_id }}{% if option.message_preview %} - {{ option.message_preview }}{% endif %}"
+                          data-search="{{ option.message_id|lower }} {{ option.message_text|lower }}"
+                        >
+                          <span class="message-item-id">{{ option.message_id }}</span>
+                          {% if option.message_preview %}
+                            <span class="message-item-text">{{ option.message_preview }}</span>
+                          {% endif %}
+                        </button>
+                      </li>
+                    {% empty %}
+                      <li>
+                        <span class="dropdown-item-text text-muted">No message IDs available for this user.</span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                {% if create_form.message_id.errors %}
+                  <div class="text-danger small mt-1">{{ create_form.message_id.errors|join:", " }}</div>
+                {% endif %}
+              </div>
+              <div class="col-12">
+                <label for="id_follow_up_message_1" class="form-label">Follow Up Message 1</label>
+                {{ create_form.follow_up_message_1 }}
+              </div>
+              <div class="col-12">
+                <label for="id_follow_up_message_2" class="form-label">Follow Up Message 2</label>
+                {{ create_form.follow_up_message_2 }}
+              </div>
+              <div class="col-12">
+                <label for="id_follow_up_message_3" class="form-label">Follow Up Message 3</label>
+                {{ create_form.follow_up_message_3 }}
+              </div>
+              <div class="col-12 d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary">Save Template</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-5">
+        <div class="card dashboard-card template-section-card h-100">
+          <div class="card-body">
+            <div class="template-section-title">
+              <i class="bi bi-upload"></i>
+              <span>Bulk Upload</span>
+            </div>
+            <p class="text-muted small">CSV headers: <code>message_id,follow_up_message_1,follow_up_message_2,follow_up_message_3</code></p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <a href="{% url 'download_follow_up_template_sample_csv' %}" class="btn btn-outline-secondary">Download Sample CSV</a>
+            </div>
+            <form method="post" enctype="multipart/form-data" class="row g-3">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="bulk_upload">
+              <input type="hidden" name="current_user" value="{{ selected_user_id }}">
+              <input type="hidden" name="current_search" value="{{ selected_search_query }}">
+              <input type="hidden" name="user" value="{{ selected_user_id }}">
+              <div class="col-12">
+                <label class="form-label">User</label>
+                <input type="text" class="form-control" value="{{ selected_user.get_full_name|default:selected_user.username }} (@{{ selected_user.username }})" readonly>
+              </div>
+              <div class="col-12">
+                <label for="id_csv_file" class="form-label">CSV File</label>
+                {{ bulk_upload_form.csv_file }}
+              </div>
+              <div class="col-12 d-flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-outline-primary">Upload Templates</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-info mb-0">Add an active user to start creating follow up templates.</div>
+  {% endif %}
+
+  <div class="card dashboard-card template-table">
+    <div class="card-body p-0 table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
           <tr>
-            <td>
-              {{ row.name }}
-              <form id="followup-form-{{ row.id }}" method="post">
-                {% csrf_token %}
-                <input type="hidden" name="connection_id" value="{{ row.id }}">
-                <input type="hidden" name="current_user" value="{{ search_form.cleaned_data.user.id|default:'' }}">
-                <input type="hidden" name="current_query" value="{{ search_form.cleaned_data.name|default:'' }}">
-              </form>
-            </td>
-            <td>{{ row.user.username }}</td>
-            <td>{{ row.connection_status.name }}</td>
-            <td><textarea name="follow_up_message_1" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_1 }}</textarea></td>
-            <td><textarea name="follow_up_message_2" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_2 }}</textarea></td>
-            <td><textarea name="follow_up_message_3" rows="2" class="form-control" form="followup-form-{{ row.id }}">{{ row.follow_up_message_3 }}</textarea></td>
-            <td class="text-end"><button type="submit" class="btn btn-sm btn-primary" form="followup-form-{{ row.id }}">Update</button></td>
+            <th>Message ID</th>
+            <th>Follow Up 1</th>
+            <th>Follow Up 2</th>
+            <th>Follow Up 3</th>
+            <th>User</th>
+            <th class="text-end">Actions</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="7" class="text-center text-muted">Search by user and name to update follow up messages.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {% for row in templates %}
+            <tr>
+              <td>{{ row.message_id }}</td>
+              <td>{{ row.follow_up_message_1|default:"-"|truncatechars:70 }}</td>
+              <td>{{ row.follow_up_message_2|default:"-"|truncatechars:70 }}</td>
+              <td>{{ row.follow_up_message_3|default:"-"|truncatechars:70 }}</td>
+              <td>{{ row.user.username }}</td>
+              <td class="text-end">
+                <div class="d-flex justify-content-end flex-wrap gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#view-template-{{ row.id }}">View</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#edit-template-{{ row.id }}">Edit</button>
+                  <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="template_id" value="{{ row.id }}">
+                    <input type="hidden" name="current_user" value="{{ selected_user_id }}">
+                    <input type="hidden" name="current_search" value="{{ selected_search_query }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+
+            <div class="modal fade" id="view-template-{{ row.id }}" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h2 class="modal-title fs-5">Message ID {{ row.message_id }}</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <label class="form-label">Follow Up Message 1</label>
+                      <textarea class="form-control" rows="4" readonly>{{ row.follow_up_message_1 }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Follow Up Message 2</label>
+                      <textarea class="form-control" rows="4" readonly>{{ row.follow_up_message_2 }}</textarea>
+                    </div>
+                    <div>
+                      <label class="form-label">Follow Up Message 3</label>
+                      <textarea class="form-control" rows="4" readonly>{{ row.follow_up_message_3 }}</textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal fade" id="edit-template-{{ row.id }}" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h2 class="modal-title fs-5">Edit Message ID {{ row.message_id }}</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <form method="post">
+                    <div class="modal-body">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="update">
+                      <input type="hidden" name="template_id" value="{{ row.id }}">
+                      <input type="hidden" name="current_user" value="{{ selected_user_id }}">
+                      <input type="hidden" name="current_search" value="{{ selected_search_query }}">
+                      <input type="hidden" name="user" value="{{ row.user_id }}">
+                      <div class="mb-3">
+                        <label class="form-label">User</label>
+                        <input type="text" class="form-control" value="{{ row.user.get_full_name|default:row.user.username }} (@{{ row.user.username }})" readonly>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Message ID</label>
+                        <input type="text" class="form-control" name="message_id" value="{{ row.message_id }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Follow Up Message 1</label>
+                        <textarea class="form-control" name="follow_up_message_1" rows="4">{{ row.follow_up_message_1 }}</textarea>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Follow Up Message 2</label>
+                        <textarea class="form-control" name="follow_up_message_2" rows="4">{{ row.follow_up_message_2 }}</textarea>
+                      </div>
+                      <div>
+                        <label class="form-label">Follow Up Message 3</label>
+                        <textarea class="form-control" name="follow_up_message_3" rows="4">{{ row.follow_up_message_3 }}</textarea>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                      <button type="submit" class="btn btn-primary">Update Template</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">No follow up templates found for the selected filters.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
+
+<script>
+  (function () {
+    const filterForm = document.getElementById("template-filter-form");
+    if (!filterForm) return;
+
+    const autoFields = document.querySelectorAll("[data-auto-submit]");
+    const textField = document.querySelector("[data-auto-submit-text]");
+    const dropdown = document.getElementById("template-message-dropdown");
+    const toggle = document.getElementById("template-message-dropdown-toggle");
+    const searchInput = document.getElementById("template-message-dropdown-search");
+    const hiddenInput = document.getElementById("template-message-id-hidden");
+    const itemButtons = dropdown ? dropdown.querySelectorAll("[data-message-item]") : [];
+    let searchTimer = null;
+
+    autoFields.forEach(function (field) {
+      field.addEventListener("change", function () {
+        filterForm.requestSubmit();
+      });
+    });
+
+    if (textField) {
+      textField.addEventListener("input", function () {
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(function () {
+          filterForm.requestSubmit();
+        }, 350);
+      });
+    }
+
+    if (!dropdown || !toggle || !searchInput || !hiddenInput) return;
+
+    function filterItems() {
+      const query = searchInput.value.trim().toLowerCase();
+      itemButtons.forEach(function (button) {
+        const row = button.closest("[data-item-row]");
+        const haystack = (button.getAttribute("data-search") || "").toLowerCase();
+        const matches = !query || haystack.includes(query);
+        row.classList.toggle("d-none", !matches);
+      });
+    }
+
+    searchInput.addEventListener("input", filterItems);
+
+    itemButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        hiddenInput.value = button.getAttribute("data-value") || "";
+        toggle.textContent = button.getAttribute("data-label") || "Select Message ID";
+      });
+    });
+
+    dropdown.addEventListener("shown.bs.dropdown", function () {
+      searchInput.focus();
+      searchInput.select();
+      filterItems();
+    });
+
+    dropdown.addEventListener("hidden.bs.dropdown", function () {
+      searchInput.value = "";
+      filterItems();
+    });
+  })();
+</script>
 {% endblock %}
