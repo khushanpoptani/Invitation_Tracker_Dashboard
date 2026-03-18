@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from .forms import (
+    BulkStatusCSVUploadForm,
     CSVUploadForm,
     FollowUpTemplateBulkUploadForm,
     FollowUpTemplateForm,
@@ -876,6 +877,13 @@ def _parse_csv_date(raw_date):
 
     return None
 
+
+def get_or_create_connection_status(status_name):
+    status = ConnectionStatus.objects.filter(name__iexact=status_name).first()
+    if status is None:
+        status = ConnectionStatus.objects.create(name=status_name)
+    return status
+
 @login_required
 def download_sample_csv(request):
     response = HttpResponse(content_type="text/csv")
@@ -926,6 +934,173 @@ def download_follow_up_template_sample_csv(request):
         ]
     )
     return response
+
+
+@login_required
+def download_bulk_status_missing_csv(request):
+    missing_rows = request.session.get("bulk_status_missing_rows", [])
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="bulk_status_missing_users.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Name", "Date Added", "Account", "Geography", "Outreach activity", "Source File"])
+    for row in missing_rows:
+        writer.writerow(
+            [
+                row.get("name", ""),
+                row.get("date_added", ""),
+                row.get("account", ""),
+                row.get("geography", ""),
+                row.get("outreach_activity", ""),
+                row.get("source_file", ""),
+            ]
+        )
+
+    return response
+
+
+@login_required
+def download_bulk_status_sample_csv(request):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="sample_bulk_update_connections.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Name", "Date Added", "Account", "Geography", "Outreach activity", "Source File"])
+    writer.writerow(
+        [
+            "John Doe",
+            "2026-03-18",
+            "Example Account",
+            "North America",
+            "Accepted invite",
+            "accepted_connections.csv",
+        ]
+    )
+    return response
+
+
+@login_required
+def bulk_update_connections(request):
+    form = BulkStatusCSVUploadForm(request.POST or None, request.FILES or None)
+    updated_rows = []
+    missing_rows = []
+    failed_rows = []
+
+    if request.method == "POST" and form.is_valid():
+        csv_file = form.cleaned_data["csv_file"]
+        user = form.cleaned_data["user"]
+
+        try:
+            decoded = csv_file.read().decode("utf-8-sig").splitlines()
+            reader = csv.DictReader(decoded)
+        except UnicodeDecodeError:
+            messages.error(request, "CSV must be UTF-8 encoded.")
+            return redirect("bulk_update_connections")
+
+        if not reader.fieldnames:
+            messages.error(request, "CSV header row is missing.")
+            return redirect("bulk_update_connections")
+
+        normalized_headers = {
+            field.strip().lower().replace(" ", "_")
+            for field in reader.fieldnames
+            if field
+        }
+        required_columns = {"name", "date_added"}
+        if not required_columns.issubset(normalized_headers):
+            messages.error(request, "CSV must contain headers: Name and Date Added.")
+            return redirect("bulk_update_connections")
+
+        accepted_status = get_or_create_connection_status("Accepted")
+
+        for line_number, row in enumerate(reader, start=2):
+            normalized = {
+                k.strip().lower().replace(" ", "_"): (v or "").strip()
+                for k, v in row.items()
+                if k
+            }
+            name = normalized.get("name", "")
+            raw_date_added = normalized.get("date_added", "")
+
+            if not name:
+                failed_rows.append(
+                    {
+                        "name": "",
+                        "reason": f"Row {line_number}: Name is required",
+                    }
+                )
+                continue
+
+            status_date = _parse_csv_date(raw_date_added)
+            if not status_date:
+                failed_rows.append(
+                    {
+                        "name": name,
+                        "reason": f"Row {line_number}: Invalid Date Added '{raw_date_added}'",
+                    }
+                )
+                continue
+
+            matching_connections = list(SentConnection.objects.filter(user=user, name__iexact=name).order_by("-id"))
+            if not matching_connections:
+                missing_rows.append(
+                    {
+                        "name": name,
+                        "date_added": raw_date_added,
+                        "account": normalized.get("account", ""),
+                        "geography": normalized.get("geography", ""),
+                        "outreach_activity": normalized.get("outreach_activity", ""),
+                        "source_file": normalized.get("source_file", ""),
+                    }
+                )
+                continue
+
+            for connection in matching_connections:
+                connection.connection_status = accepted_status
+                connection.status_date = status_date
+
+                update_fields = ["connection_status", "status_date", "updated_at"]
+                follow_up_message = FollowUpMessage.objects.filter(
+                    user=connection.user,
+                    message_id=connection.message_id,
+                ).first()
+                if follow_up_message:
+                    apply_follow_up_template_to_connection(connection, follow_up_message, save=False)
+                    update_fields.extend(
+                        ["follow_up_message", "follow_up_message_1", "follow_up_message_2", "follow_up_message_3"]
+                    )
+
+                connection.save(update_fields=list(dict.fromkeys(update_fields)))
+                updated_rows.append(
+                    {
+                        "name": connection.name,
+                        "status_date": status_date.isoformat(),
+                        "message_id": connection.message_id,
+                    }
+                )
+
+        request.session["bulk_status_missing_rows"] = missing_rows
+
+        if updated_rows:
+            messages.success(request, f"Updated {len(updated_rows)} connection record(s) to Accepted.")
+        if missing_rows:
+            messages.warning(request, f"{len(missing_rows)} row(s) were not found for the selected user.")
+        if failed_rows:
+            messages.warning(request, "Some rows were skipped: " + " | ".join(row["reason"] for row in failed_rows[:5]))
+
+        form = BulkStatusCSVUploadForm(initial={"user": user})
+
+    return render(
+        request,
+        "tracker/bulk_update_connections.html",
+        {
+            "form": form,
+            "updated_rows": updated_rows,
+            "missing_rows": missing_rows,
+            "failed_rows": failed_rows,
+        },
+    )
 
 
 @login_required

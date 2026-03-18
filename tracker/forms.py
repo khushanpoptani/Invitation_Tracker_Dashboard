@@ -49,6 +49,11 @@ class CSVUploadForm(BootstrapFormMixin, forms.Form):
     csv_file = forms.FileField(required=True)
 
 
+class BulkStatusCSVUploadForm(BootstrapFormMixin, forms.Form):
+    user = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True).order_by("username"), required=True)
+    csv_file = forms.FileField(required=True)
+
+
 class FollowUpTemplateForm(BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

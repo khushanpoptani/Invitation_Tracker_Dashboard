@@ -17,6 +17,21 @@ urlpatterns = [
         views.download_follow_up_template_sample_csv,
         name="download_follow_up_template_sample_csv",
     ),
+    path(
+        "bulk-update-connections/",
+        views.bulk_update_connections,
+        name="bulk_update_connections",
+    ),
+    path(
+        "bulk-update-connections/sample/",
+        views.download_bulk_status_sample_csv,
+        name="download_bulk_status_sample_csv",
+    ),
+    path(
+        "bulk-update-connections/missing/",
+        views.download_bulk_status_missing_csv,
+        name="download_bulk_status_missing_csv",
+    ),
     path("upload-csv/sample/", views.download_sample_csv, name="download_sample_csv"),
     path("upload-csv/", views.upload_sent_connections_csv, name="upload_sent_connections_csv"),
     path("update-status/", views.update_connection_status, name="update_connection_status"),
