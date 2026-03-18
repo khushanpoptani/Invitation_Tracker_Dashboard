@@ -5,6 +5,8 @@ Django settings for flexgcc_tracker project.
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+SERVER_DB_DIR = Path("/var/www/DB")
+SQLITE_DB_PATH = SERVER_DB_DIR / "db.sqlite3" if SERVER_DB_DIR.exists() else BASE_DIR / "db.sqlite3"
 
 SECRET_KEY = "django-insecure-em7#il4&7i_r0w$re*y9_8k2#-a1qu1l^$&5--y__ql=gw0g*b"
 DEBUG = True
@@ -55,7 +57,7 @@ WSGI_APPLICATION = "flexgcc_tracker.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": SQLITE_DB_PATH,
     }
 }
 
