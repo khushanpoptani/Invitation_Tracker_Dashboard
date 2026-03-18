@@ -8,7 +8,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "django-insecure-em7#il4&7i_r0w$re*y9_8k2#-a1qu1l^$&5--y__ql=gw0g*b"
 DEBUG = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
+CSRF_TRUSTED_ORIGINS = [
+    "https://tracker.flexgcc.com",
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

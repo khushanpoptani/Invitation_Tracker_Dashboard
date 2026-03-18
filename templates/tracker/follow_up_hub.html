@@ -90,6 +90,15 @@
     resize: vertical;
   }
 
+  .profile-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
   @media (max-width: 991.98px) {
     .follow-up-meta {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -178,6 +187,12 @@
           <div class="follow-up-meta-item">
             <div class="follow-up-meta-label">Name</div>
             <div>{{ row.name }}</div>
+            {% if row.profile_link %}
+              <a href="{{ row.profile_link }}" target="_blank" rel="noopener noreferrer" class="profile-link mt-2">
+                <i class="bi bi-box-arrow-up-right"></i>
+                <span>Open Profile</span>
+              </a>
+            {% endif %}
           </div>
           <div class="follow-up-meta-item">
             <div class="follow-up-meta-label">User</div>
