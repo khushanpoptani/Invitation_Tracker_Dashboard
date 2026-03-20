@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -641,11 +642,62 @@ def message_type_create(request):
 @login_required
 def message_type_edit(request, pk):
     message_type = get_object_or_404(MessageType, pk=pk)
+    original_message_id = message_type.message_id
+    original_user_id = message_type.user_id
     form = MessageTypeForm(request.POST or None, instance=message_type)
+    form.fields["user"].disabled = True
+
     if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Message type updated.")
-        return redirect("message_type_list")
+        updated_message_type = form.save(commit=False)
+        updated_message_id = (updated_message_type.message_id or "").strip()
+        updated_message_type.user_id = original_user_id
+
+        try:
+            with transaction.atomic():
+                if updated_message_id != original_message_id:
+                    conflicting_follow_up = FollowUpMessage.objects.filter(
+                        user_id=original_user_id,
+                        message_id=updated_message_id,
+                    ).exclude(message_id=original_message_id)
+                    if conflicting_follow_up.exists():
+                        form.add_error(
+                            "message_id",
+                            "That Message ID already exists in Follow Up Templates for this user.",
+                        )
+                        raise ValueError("follow_up_conflict")
+
+                    updated_message_type.save()
+
+                    SentConnection.objects.filter(
+                        user_id=original_user_id,
+                        message_id=original_message_id,
+                    ).update(
+                        message_id=updated_message_id,
+                        updated_at=timezone.now(),
+                    )
+
+                    FollowUpMessage.objects.filter(
+                        user_id=original_user_id,
+                        message_id=original_message_id,
+                    ).update(
+                        message_id=updated_message_id,
+                        updated_at=timezone.now(),
+                    )
+                else:
+                    updated_message_type.save()
+        except ValueError as exc:
+            if str(exc) != "follow_up_conflict":
+                raise
+        else:
+            if updated_message_id != original_message_id:
+                messages.success(
+                    request,
+                    "Message type updated. Sent Connections and Follow Up Templates were synced to the new Message ID.",
+                )
+            else:
+                messages.success(request, "Message type updated.")
+            return redirect("message_type_list")
+
     return render(
         request,
         "tracker/form_page.html",
@@ -895,7 +947,7 @@ def download_sample_csv(request):
             "name",
             "profile_link",
             "message",
-            "message_id",
+            "message_format",
             "date",
         ]
     )
@@ -903,8 +955,8 @@ def download_sample_csv(request):
         [
             "John Doe",
             "https://www.linkedin.com/in/john-doe",
-            "Hi John, I'd like to connect.",
-            "MSG001",
+            "Hi John, I wanted to send a quick follow up on my connection request.",
+            "Hi $first_name, I wanted to send a quick follow up on my connection request.",
             "2026-02-27",
         ]
     )
@@ -1118,7 +1170,7 @@ def upload_sent_connections_csv(request):
             messages.error(request, "CSV must be UTF-8 encoded.")
             return redirect("upload_sent_connections_csv")
 
-        required_columns = {"name", "profile_link", "message", "message_id", "date"}
+        required_columns = {"name", "profile_link", "message", "message_format", "date"}
         if not reader.fieldnames:
             messages.error(request, "CSV header row is missing.")
             return redirect("upload_sent_connections_csv")
@@ -1131,7 +1183,7 @@ def upload_sent_connections_csv(request):
         if not required_columns.issubset(normalized_headers):
             messages.error(
                 request,
-                "CSV must contain headers: name, profile_link, message, message_id, date.",
+                "CSV must contain headers: name, profile_link, message, message_format, date.",
             )
             return redirect("upload_sent_connections_csv")
 
@@ -1140,7 +1192,14 @@ def upload_sent_connections_csv(request):
             pending_status = ConnectionStatus.objects.create(name="Pending")
 
         created_count = 0
+        created_message_type_count = 0
         failed_rows = []
+        message_type_cache = {
+            message_text.strip(): message_id
+            for message_text, message_id in MessageType.objects.filter(user=user)
+            .exclude(message="")
+            .values_list("message", "message_id")
+        }
 
         for line_number, row in enumerate(reader, start=2):
             normalized = {
@@ -1150,9 +1209,14 @@ def upload_sent_connections_csv(request):
             }
             name = normalized.get("name", "")
             raw_date = normalized.get("date", "")
+            message_format = normalized.get("message_format", "")
 
             if not name:
                 failed_rows.append(f"Row {line_number}: name is required")
+                continue
+
+            if not message_format:
+                failed_rows.append(f"Row {line_number}: message_format is required")
                 continue
 
             parsed_date = _parse_csv_date(raw_date)
@@ -1160,11 +1224,28 @@ def upload_sent_connections_csv(request):
                 failed_rows.append(f"Row {line_number}: invalid date '{raw_date}'")
                 continue
 
+            message_id = message_type_cache.get(message_format)
+            if not message_id:
+                message_id = _next_message_id_for_user(user)
+                while MessageType.objects.filter(user=user, message_id=message_id).exists():
+                    if message_id.isdigit():
+                        message_id = str(int(message_id) + 1)
+                    else:
+                        message_id = str(MessageType.objects.filter(user=user).count() + 1)
+
+                MessageType.objects.create(
+                    user=user,
+                    message=message_format,
+                    message_id=message_id,
+                )
+                message_type_cache[message_format] = message_id
+                created_message_type_count += 1
+
             SentConnection.objects.create(
                 name=name,
                 profile_link=normalized.get("profile_link", ""),
                 message=normalized.get("message", ""),
-                message_id=normalized.get("message_id", ""),
+                message_id=message_id,
                 date=parsed_date,
                 connection_status=pending_status,
                 follow_up_message=None,
@@ -1173,9 +1254,12 @@ def upload_sent_connections_csv(request):
             created_count += 1
 
         if created_count:
+            success_message = f"Imported {created_count} sent connections (status defaulted to Pending)."
+            if created_message_type_count:
+                success_message += f" Created {created_message_type_count} new message format(s)."
             messages.success(
                 request,
-                f"Imported {created_count} sent connections (status defaulted to Pending).",
+                success_message,
             )
 
         if failed_rows:
@@ -1189,7 +1273,7 @@ def upload_sent_connections_csv(request):
         {
             "form": form,
             "title": "Upload Sent Connections CSV",
-            "sample_headers": "name,profile_link,message,message_id,date",
+            "sample_headers": "name,profile_link,message,message_format,date",
         },
     )
 
