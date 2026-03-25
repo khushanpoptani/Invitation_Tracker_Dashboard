@@ -57,7 +57,7 @@
 
   .follow-up-meta {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
   }
@@ -205,6 +205,31 @@
           <div class="follow-up-meta-item">
             <div class="follow-up-meta-label">Accepted Date</div>
             <div>{{ row.status_date|default:row.date }}</div>
+          </div>
+          <div class="follow-up-meta-item">
+            <div class="follow-up-meta-label">Responded</div>
+            <div class="mb-2">
+              {% if row.responded %}
+                <span class="badge text-bg-success">True</span>
+              {% else %}
+                <span class="badge text-bg-secondary">False</span>
+              {% endif %}
+            </div>
+            <form method="post" class="d-flex flex-column gap-2">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update_responded">
+              <input type="hidden" name="connection_id" value="{{ row.id }}">
+              <input type="hidden" name="current_user" value="{{ selected_user_id }}">
+              <input type="hidden" name="current_search" value="{{ selected_search_query }}">
+              <input type="hidden" name="current_follow_up_sent_count" value="{{ selected_follow_up_count }}">
+              <input type="hidden" name="current_from_date" value="{{ selected_from_date }}">
+              <input type="hidden" name="current_to_date" value="{{ selected_to_date }}">
+              <select name="responded" class="form-select form-select-sm">
+                <option value="true" {% if row.responded %}selected{% endif %}>True</option>
+                <option value="false" {% if not row.responded %}selected{% endif %}>False</option>
+              </select>
+              <button type="submit" class="btn btn-outline-primary btn-sm">Update Responded</button>
+            </form>
           </div>
         </div>
 

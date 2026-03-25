@@ -279,6 +279,7 @@
             <th>Message ID</th>
             <th>Date</th>
             <th>Status</th>
+            <th>Responded</th>
             <th>Follow Up Sent</th>
             <th>Follow Up 1</th>
             <th>Follow Up 2</th>
@@ -301,6 +302,13 @@
               <td>{{ row.message_id|default:"-" }}</td>
               <td>{{ row.date|date:"M d, Y" }}</td>
               <td>{{ row.connection_status.name|default:"-" }}</td>
+              <td>
+                {% if row.responded %}
+                  <span class="badge text-bg-success">True</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">False</span>
+                {% endif %}
+              </td>
               <td>{{ row.follow_up_sent_count }}</td>
               <td>{{ row.follow_up_message_1|default:'-'|truncatechars:45 }}</td>
               <td>{{ row.follow_up_message_2|default:'-'|truncatechars:45 }}</td>
@@ -309,7 +317,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="11" class="text-center text-muted py-4">No sent connections found.</td>
+              <td colspan="12" class="text-center text-muted py-4">No sent connections found.</td>
             </tr>
           {% endfor %}
         </tbody>

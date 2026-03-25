@@ -502,6 +502,7 @@ def sent_connections_list(request):
                 "Date",
                 "Status Date",
                 "Status",
+                "Responded",
                 "Follow Up Sent Count",
                 "Follow Up 1",
                 "Follow Up 2",
@@ -523,6 +524,7 @@ def sent_connections_list(request):
                     row.date.isoformat() if row.date else "",
                     row.status_date.isoformat() if row.status_date else "",
                     row.connection_status.name if row.connection_status else "",
+                    "True" if row.responded else "False",
                     row.follow_up_sent_count,
                     row.follow_up_message_1,
                     row.follow_up_message_2,
@@ -1393,6 +1395,21 @@ def follow_up_hub(request):
         messages.success(request, f"Follow up {follow_up_index} marked as sent for {connection.name}.")
         return redirect_with_filters()
 
+    if request.method == "POST" and request.POST.get("action") == "update_responded":
+        connection = get_object_or_404(SentConnection, pk=request.POST.get("connection_id"))
+        responded_value = request.POST.get("responded", "").strip().lower()
+        if responded_value not in {"true", "false"}:
+            messages.error(request, "Invalid responded value.")
+            return redirect_with_filters()
+
+        connection.responded = responded_value == "true"
+        connection.save(update_fields=["responded", "updated_at"])
+        messages.success(
+            request,
+            f"Responded updated to {'True' if connection.responded else 'False'} for {connection.name}.",
+        )
+        return redirect_with_filters()
+
     accepted_status = ConnectionStatus.objects.filter(name__iexact="Accepted").first()
     connections = (
         SentConnection.objects.select_related("user", "connection_status")
@@ -1438,6 +1455,7 @@ def follow_up_hub(request):
                 "User",
                 "Message ID",
                 "Accepted Date",
+                "Responded",
                 "Follow Up Sent Count",
                 "Follow Up 1",
                 "Follow Up Sent Date 1",
@@ -1454,6 +1472,7 @@ def follow_up_hub(request):
                     row.user.username,
                     row.message_id,
                     row.status_date.isoformat() if row.status_date else (row.date.isoformat() if row.date else ""),
+                    "True" if row.responded else "False",
                     row.follow_up_sent_count,
                     row.follow_up_message_1,
                     row.follow_up_sent_date_1.isoformat() if row.follow_up_sent_date_1 else "",

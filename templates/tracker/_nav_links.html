@@ -19,24 +19,12 @@
   <i class="bi bi-envelope-check nav-icon" aria-hidden="true"></i>
   <span class="nav-text">Follow Ups</span>
 </a>
-<a class="nav-link {% if current_url == 'upload_sent_connections_csv' %}active{% endif %}" href="{% url 'upload_sent_connections_csv' %}" title="Upload CSV">
-  <i class="bi bi-upload nav-icon" aria-hidden="true"></i>
-  <span class="nav-text">Upload CSV</span>
-</a>
 <a class="nav-link {% if current_url == 'update_connection_status' %}active{% endif %}" href="{% url 'update_connection_status' %}" title="Update Status">
   <i class="bi bi-arrow-repeat nav-icon" aria-hidden="true"></i>
   <span class="nav-text">Update Status</span>
 </a>
-<a class="nav-link {% if current_url == 'bulk_update_connections' %}active{% endif %}" href="{% url 'bulk_update_connections' %}" title="Bulk Update">
-  <i class="bi bi-file-earmark-arrow-up nav-icon" aria-hidden="true"></i>
-  <span class="nav-text">Bulk Update</span>
-</a>
 <a class="nav-link {% if current_url == 'user_list' or current_url == 'user_create' or current_url == 'user_edit' or current_url == 'user_detail' or current_url == 'user_deactivate' %}active{% endif %}" href="{% url 'user_list' %}" title="Users">
   <i class="bi bi-people nav-icon" aria-hidden="true"></i>
   <span class="nav-text">Users</span>
-</a>
-<a class="nav-link" href="/admin/" target="_blank" rel="noopener noreferrer" title="Admin">
-  <i class="bi bi-shield-lock nav-icon" aria-hidden="true"></i>
-  <span class="nav-text">Admin</span>
 </a>
 {% endwith %}

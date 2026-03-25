@@ -65,6 +65,7 @@ class SentConnection(models.Model):
     message_id = models.CharField(max_length=100, blank=True)
     date = models.DateField(default=timezone.localdate)
     status_date = models.DateField(null=True, blank=True)
+    responded = models.BooleanField(default=False)
     connection_status = models.ForeignKey(
         ConnectionStatus,
         on_delete=models.PROTECT,

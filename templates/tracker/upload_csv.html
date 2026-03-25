@@ -9,7 +9,7 @@
         <div class="d-flex flex-wrap gap-2 mb-3">
           <a href="{% url 'download_sample_csv' %}" class="btn btn-outline-secondary">Download Sample CSV</a>
         </div>
-        <p class="text-muted">Select the user first, then upload the CSV. Expected required headers:</p>
+        <p class="text-muted">Select the user first, then upload the CSV. The <code>message_format</code> column is matched against that user's saved message types. If it does not exist, a new Message ID is created automatically for that user.</p>
         <code class="d-block mb-3">{{ sample_headers }}</code>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
