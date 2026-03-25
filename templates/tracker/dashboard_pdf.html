@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Export</title>
+  <style>
+    :root {
+      --ink: #15304c;
+      --muted: #5f748b;
+      --border: #d8e4f0;
+      --panel: #ffffff;
+      --bg: #f4f7fb;
+      --blue: #3f6df0;
+      --green: #2b8a63;
+      --gold: #f0a43a;
+      --navy: #245b9b;
+      --rose: #c44d64;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .header-title {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .header-copy {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .meta-pill {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #f7faff;
+    }
+
+    .grid-4,
+    .grid-3,
+    .grid-2 {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .kpi-box {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      background: #fbfdff;
+    }
+
+    .kpi-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0;
+    }
+
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1;
+      margin: 8px 0 0;
+    }
+
+    .kpi-delta {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .section-copy {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .donut-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    .donut-chart {
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      position: relative;
+      margin: 0 auto;
+    }
+
+    .donut-chart::after {
+      content: "";
+      position: absolute;
+      inset: 22%;
+      border-radius: 50%;
+      background: #fff;
+      border: 1px solid #e2eaf4;
+    }
+
+    .donut-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .donut-total {
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .donut-caption {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #f8fbff;
+      border: 1px solid #edf2f7;
+    }
+
+    .legend-left {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+
+    .legend-label {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .legend-value {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .funnel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .funnel-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 60px 70px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .funnel-bar-wrap {
+      height: 16px;
+      border-radius: 999px;
+      background: #edf2f8;
+      overflow: hidden;
+    }
+
+    .funnel-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #194a7d 0%, #3c6df0 100%);
+    }
+
+    .funnel-label,
+    .funnel-rate {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .funnel-value {
+      font-size: 15px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .trend-block {
+      border: 1px solid #edf2f7;
+      border-radius: 14px;
+      padding: 12px;
+      margin-top: 12px;
+      background: #fbfdff;
+    }
+
+    .trend-label {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .trend-chart {
+      width: 100%;
+      height: 240px;
+      display: block;
+    }
+
+    .comparison-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .comparison-row {
+      border: 1px solid #edf2f7;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .comparison-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .comparison-name {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .comparison-subtext {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .comparison-value {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .comparison-bar-wrap {
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #eaf0f7;
+    }
+
+    .comparison-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #285383 0%, #3d6df0 100%);
+    }
+
+    .comparison-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #edf2f7;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 11px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 12px;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        max-width: none;
+        padding: 12px;
+      }
+
+      .panel {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="panel">
+      <h1 class="header-title">Dashboard Export</h1>
+      <p class="header-copy">Connection activity, follow-ups, responses, trends, comparison, and breakdown for the selected dashboard filters.</p>
+      <div class="meta-row">
+        <span class="meta-pill">User: {{ selected_user_name }}</span>
+        <span class="meta-pill">Date Range: {{ current_period_label }}</span>
+        <span class="meta-pill">Primary Range: {{ current_period_range }}</span>
+        <span class="meta-pill">Compare Range: {{ compare_period_range }}</span>
+        <span class="meta-pill">Exported: {{ today|date:"d M Y" }}</span>
+      </div>
+    </section>
+
+    <section class="grid-4">
+      {% for card in kpi_cards %}
+        <article class="kpi-box">
+          <p class="kpi-label">{{ card.title }}</p>
+          <div class="kpi-value">{{ card.value }}</div>
+          <div class="kpi-delta">{{ card.delta.display }}</div>
+        </article>
+      {% endfor %}
+    </section>
+
+    <section class="grid-2">
+      <article class="panel">
+        <h2 class="section-title">Connection Status Breakdown</h2>
+        <p class="section-copy">Accepted, pending, and responded distribution for the selected connection cohort.</p>
+        <div class="donut-layout">
+          <div class="donut-chart" style="background: conic-gradient({{ donut_style }});">
+            <div class="donut-center">
+              <div class="donut-total">{{ status_total }}</div>
+              <div class="donut-caption">Total Connections</div>
+            </div>
+          </div>
+          <div class="legend">
+            {% for segment in donut_segments %}
+              <div class="legend-item">
+                <div class="legend-left">
+                  <span class="dot" style="background: {{ segment.color }};"></span>
+                  <div>
+                    <div class="legend-label">{{ segment.label }}</div>
+                    <div class="comparison-subtext">{{ segment.percent|floatformat:1 }}%</div>
+                  </div>
+                </div>
+                <div class="legend-value">{{ segment.value }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2 class="section-title">Conversion Funnel</h2>
+        <p class="section-copy">Sent to accepted to follow-up to responded.</p>
+        <div class="funnel">
+          {% for step in funnel_steps %}
+            <div class="funnel-row">
+              <div class="funnel-label">{{ step.label }}</div>
+              <div class="funnel-bar-wrap">
+                <div class="funnel-bar" style="width: {{ step.width|floatformat:1 }}%;"></div>
+              </div>
+              <div class="funnel-value">{{ step.value }}</div>
+              <div class="funnel-rate">{{ step.conversion_rate|floatformat:1 }}%</div>
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2 class="section-title">Performance Trend</h2>
+      <p class="section-copy">All trend views are included in the export: daily, weekly, and monthly.</p>
+      <div class="trend-block">
+        <div class="trend-label">Daily</div>
+        <svg id="trend-chart-daily" class="trend-chart" viewBox="0 0 900 240" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="trend-block">
+        <div class="trend-label">Weekly</div>
+        <svg id="trend-chart-weekly" class="trend-chart" viewBox="0 0 900 240" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="trend-block">
+        <div class="trend-label">Monthly</div>
+        <svg id="trend-chart-monthly" class="trend-chart" viewBox="0 0 900 240" preserveAspectRatio="none"></svg>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <article class="panel">
+        <h2 class="section-title">User Comparison</h2>
+        <p class="section-copy">Current comparison is shown using connections sent for the selected period.</p>
+        <div id="comparison-list" class="comparison-list">
+          {% if not user_metric_rows %}
+            <div class="empty">No user activity found for the selected filters.</div>
+          {% endif %}
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2 class="section-title">Rates</h2>
+        <p class="section-copy">Quality metrics for acceptance, follow-up, and response performance.</p>
+        <div class="grid-3" style="margin-top: 14px;">
+          {% for card in rate_cards %}
+            <div class="kpi-box">
+              <p class="kpi-label">{{ card.title }}</p>
+              <div class="kpi-value">{{ card.value|floatformat:1 }}%</div>
+              <div class="kpi-delta">{{ card.note }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2 class="section-title">Detailed Breakdown</h2>
+      <p class="section-copy">Structured summary for export review.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>{% if breakdown_by == "message" %}Message ID{% else %}User{% endif %}</th>
+            <th>Sent</th>
+            <th>Accepted</th>
+            <th>Follow-Up</th>
+            <th>Responded</th>
+            <th>Accept %</th>
+            <th>Response %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in breakdown_rows %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.sent }}</td>
+              <td>{{ row.accepted }}</td>
+              <td>{{ row.follow_up }}</td>
+              <td>{{ row.responded }}</td>
+              <td>{{ row.acceptance_rate|floatformat:1 }}%</td>
+              <td>{{ row.response_rate|floatformat:1 }}%</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7">No rows available for this export.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  {{ trend_payload|json_script:"dashboard-trend-pdf-payload" }}
+  {{ user_metric_rows|json_script:"dashboard-user-metrics-pdf" }}
+
+  <script>
+    (function () {
+      function renderTrend(svgId, groupKey) {
+        const trendNode = document.getElementById("dashboard-trend-pdf-payload");
+        const svg = document.getElementById(svgId);
+        if (!trendNode || !svg) return;
+
+        const payload = JSON.parse(trendNode.textContent || "{}");
+        const groupData = payload[groupKey];
+        if (!groupData) return;
+
+        const labels = groupData.labels || [];
+        const datasets = groupData.datasets || {};
+        const colors = {
+          sent: "#245b9b",
+          accepted: "#2b8a63",
+          follow_up: "#f0a43a",
+          responded: "#3f6df0"
+        };
+        const seriesKeys = ["sent", "accepted", "follow_up", "responded"];
+        const values = seriesKeys.flatMap(function (key) {
+          return datasets[key] || [];
+        });
+        const maxValue = Math.max.apply(null, values.concat([0]));
+        const width = 900;
+        const height = 240;
+        const padding = { top: 18, right: 16, bottom: 34, left: 34 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+
+        function xForIndex(index, count) {
+          if (count <= 1) return padding.left + chartWidth / 2;
+          return padding.left + (chartWidth * index) / (count - 1);
+        }
+
+        function yForValue(value) {
+          if (maxValue === 0) return padding.top + chartHeight;
+          return padding.top + chartHeight - (value / maxValue) * chartHeight;
+        }
+
+        const grid = [];
+        for (let step = 0; step < 4; step += 1) {
+          const y = padding.top + (chartHeight * step) / 3;
+          grid.push('<line x1="' + padding.left + '" y1="' + y + '" x2="' + (width - padding.right) + '" y2="' + y + '" stroke="#e5edf6" stroke-width="1" />');
+        }
+
+        const lines = seriesKeys.map(function (key) {
+          const points = (datasets[key] || []).map(function (value, index) {
+            return xForIndex(index, labels.length) + "," + yForValue(value);
+          });
+          if (!points.length) return "";
+          return '<polyline fill="none" stroke="' + colors[key] + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="' + points.join(" ") + '" />';
+        }).join("");
+
+        const labelStep = labels.length > 8 ? Math.ceil(labels.length / 8) : 1;
+        const labelMarkup = labels.map(function (label, index) {
+          if (index % labelStep !== 0 && index !== labels.length - 1) return "";
+          return '<text x="' + xForIndex(index, labels.length) + '" y="' + (height - 10) + '" text-anchor="middle" fill="#7a8da3" font-size="11">' + label + '</text>';
+        }).join("");
+
+        svg.innerHTML =
+          grid.join("") +
+          '<line x1="' + padding.left + '" y1="' + (padding.top + chartHeight) + '" x2="' + (width - padding.right) + '" y2="' + (padding.top + chartHeight) + '" stroke="#d8e3ee" stroke-width="1" />' +
+          lines +
+          labelMarkup;
+      }
+
+      function renderComparison() {
+        const comparisonNode = document.getElementById("dashboard-user-metrics-pdf");
+        const comparisonList = document.getElementById("comparison-list");
+        if (!comparisonNode || !comparisonList) return;
+
+        const rows = JSON.parse(comparisonNode.textContent || "[]");
+        if (!rows.length) return;
+
+        const maxValue = Math.max.apply(null, rows.map(function (row) {
+          return row.sent || 0;
+        }).concat([1]));
+
+        comparisonList.innerHTML = rows.map(function (row) {
+          const width = maxValue ? Math.max(((row.sent || 0) / maxValue) * 100, row.sent ? 6 : 0) : 0;
+          return (
+            '<div class="comparison-row">' +
+              '<div class="comparison-top">' +
+                '<div>' +
+                  '<div class="comparison-name">' + row.label + '</div>' +
+                  '<div class="comparison-subtext">' + row.subtext + '</div>' +
+                '</div>' +
+                '<div class="comparison-value">' + row.sent + '</div>' +
+              '</div>' +
+              '<div class="comparison-bar-wrap"><div class="comparison-bar" style="width:' + width.toFixed(1) + '%;"></div></div>' +
+              '<div class="comparison-meta"><span>Accepted ' + row.accepted + '</span><span>Follow-Up ' + row.follow_up + '</span><span>Responded ' + row.responded + '</span></div>' +
+            '</div>'
+          );
+        }).join("");
+      }
+
+      renderTrend("trend-chart-daily", "daily");
+      renderTrend("trend-chart-weekly", "weekly");
+      renderTrend("trend-chart-monthly", "monthly");
+      renderComparison();
+
+      window.setTimeout(function () {
+        window.print();
+      }, 350);
+    })();
+  </script>
+</body>
+</html>
