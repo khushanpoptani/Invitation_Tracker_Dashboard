@@ -62,15 +62,30 @@
 
   .filter-grid {
     display: grid;
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0.9rem;
     align-items: end;
   }
 
+  .filter-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.95rem;
+  }
+
+  .filter-toolbar-spacer {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   .filter-actions {
     display: flex;
-    gap: 0.65rem;
+    align-items: flex-start;
     justify-content: flex-end;
+    gap: 0.7rem;
     flex-wrap: wrap;
   }
 
@@ -81,12 +96,15 @@
   }
 
   .message-format-tile {
-    max-width: 22rem;
-    padding: 0.55rem 0.75rem;
+    flex: 1 1 30rem;
+    min-width: 20rem;
+    max-width: 44rem;
+    padding: 0.7rem 0.9rem;
     border-radius: 0.95rem;
     border: 1px solid #d8e4f0;
     background: #f8fbff;
     color: #28425f;
+    text-align: left;
   }
 
   .message-format-label {
@@ -101,11 +119,37 @@
 
   .message-format-value {
     display: block;
-    font-size: 0.84rem;
-    line-height: 1.35;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .sort-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.38rem;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+  }
+
+  .sort-button:hover {
+    color: #28425f;
+  }
+
+  .sort-icon {
+    font-size: 0.8rem;
+    color: #8aa0b8;
+  }
+
+  .sort-button.active .sort-icon {
+    color: #28425f;
   }
 
   .custom-date-row {
@@ -577,10 +621,6 @@
     .filter-grid {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
-
-    .filter-grid .filter-actions-wrap {
-      grid-column: span 4;
-    }
   }
 
   @media (max-width: 1199.98px) {
@@ -605,17 +645,23 @@
       grid-template-columns: 1fr;
     }
 
-    .filter-grid .filter-actions-wrap {
-      grid-column: auto;
-    }
-
     .filter-actions {
       justify-content: stretch;
+    }
+
+    .filter-toolbar {
+      flex-direction: column;
+      align-items: stretch;
     }
 
     .filter-actions .btn,
     .filter-actions a {
       width: 100%;
+    }
+
+    .message-format-tile {
+      min-width: 0;
+      max-width: none;
     }
 
     .funnel-row {
@@ -647,7 +693,47 @@
   </section>
 
   <section class="filter-card">
-    <form method="get" id="dashboard-filter-form" class="filter-grid">
+    <form method="get" id="dashboard-filter-form">
+      <div class="filter-toolbar">
+        {% if selected_message_id and selected_message_format %}
+          <div class="message-format-tile" title="{{ selected_message_format }}">
+            <span class="message-format-label">Selected Message Format</span>
+            <span class="message-format-value">{{ selected_message_format }}</span>
+          </div>
+        {% else %}
+          <div class="filter-toolbar-spacer"></div>
+        {% endif %}
+        <div class="filter-actions">
+          <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Reset</a>
+          <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="{% url 'dashboard' %}?user={{ selected_user_id }}&date_range={{ selected_date_range }}&custom_from={{ custom_from }}&custom_to={{ custom_to }}&compare_by={{ selected_compare_by }}&compare_target={{ selected_compare_target }}&message_id={{ selected_message_id }}&breakdown={{ breakdown_by }}&download=pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Export PDF
+                </a>
+              </li>
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="{% url 'dashboard' %}?user={{ selected_user_id }}&date_range={{ selected_date_range }}&custom_from={{ custom_from }}&custom_to={{ custom_to }}&compare_by={{ selected_compare_by }}&compare_target={{ selected_compare_target }}&message_id={{ selected_message_id }}&breakdown={{ breakdown_by }}&download=csv"
+                >
+                  Export CSV
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-grid">
       <div>
         <label for="dashboard-user-filter" class="form-label">User</label>
         <select id="dashboard-user-filter" name="user" class="form-select">
@@ -703,41 +789,6 @@
         </select>
       </div>
       <input type="hidden" name="breakdown" value="{{ breakdown_by }}">
-      <div class="filter-actions-wrap">
-        <div class="filter-actions">
-          {% if selected_message_id and selected_message_format %}
-            <div class="message-format-tile" title="{{ selected_message_format }}">
-              <span class="message-format-label">Selected Message Format</span>
-              <span class="message-format-value">{{ selected_message_format }}</span>
-            </div>
-          {% endif %}
-          <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Reset</a>
-          <div class="dropdown">
-            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-              Export
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li>
-                <a
-                  class="dropdown-item"
-                  href="{% url 'dashboard' %}?user={{ selected_user_id }}&date_range={{ selected_date_range }}&custom_from={{ custom_from }}&custom_to={{ custom_to }}&compare_by={{ selected_compare_by }}&compare_target={{ selected_compare_target }}&message_id={{ selected_message_id }}&breakdown={{ breakdown_by }}&download=pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Export PDF
-                </a>
-              </li>
-              <li>
-                <a
-                  class="dropdown-item"
-                  href="{% url 'dashboard' %}?user={{ selected_user_id }}&date_range={{ selected_date_range }}&custom_from={{ custom_from }}&custom_to={{ custom_to }}&compare_by={{ selected_compare_by }}&compare_target={{ selected_compare_target }}&message_id={{ selected_message_id }}&breakdown={{ breakdown_by }}&download=csv"
-                >
-                  Export CSV
-                </a>
-              </li>
-            </ul>
-          </div>
-        </div>
       </div>
     </form>
     <p class="filter-help">
@@ -918,21 +969,67 @@
       <table class="table table-hover align-middle breakdown-table">
         <thead>
           <tr>
-            <th>{% if breakdown_by == "message" %}Message ID{% else %}User{% endif %}</th>
-            <th>Sent</th>
-            <th>Accepted</th>
-            <th>Follow-Up</th>
-            <th>Responded</th>
-            <th>Accept %</th>
-            <th>Response %</th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="label" data-sort-type="text">
+                <span>{% if breakdown_by == "message" %}Message ID{% else %}User{% endif %}</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="sent" data-sort-type="number">
+                <span>Sent</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="accepted" data-sort-type="number">
+                <span>Accepted</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="follow_up" data-sort-type="number">
+                <span>Follow-Up</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="responded" data-sort-type="number">
+                <span>Responded</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="acceptance_rate" data-sort-type="number">
+                <span>Accept %</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
+            <th>
+              <button type="button" class="sort-button" data-sort-key="response_rate" data-sort-type="number">
+                <span>Response %</span>
+                <span class="sort-icon"><i class="bi bi-arrow-down-up"></i></span>
+              </button>
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="breakdown-table-body">
           {% for row in breakdown_rows %}
-            <tr>
+            <tr
+              data-row-index="{{ forloop.counter0 }}"
+              data-label="{{ row.label|lower }}"
+              data-sent="{{ row.sent }}"
+              data-accepted="{{ row.accepted }}"
+              data-follow_up="{{ row.follow_up }}"
+              data-responded="{{ row.responded }}"
+              data-acceptance_rate="{{ row.acceptance_rate }}"
+              data-response_rate="{{ row.response_rate }}"
+            >
               <td>
                 <div class="breakdown-entity" {% if breakdown_by == "message" and row.hover_text %}title="{{ row.hover_text }}"{% endif %}>{{ row.label }}</div>
-                <div class="breakdown-subtext">{{ row.subtext }}</div>
+                {% if row.subtext %}
+                  <div class="breakdown-subtext">{{ row.subtext }}</div>
+                {% endif %}
               </td>
               <td>{{ row.sent }}</td>
               <td>{{ row.accepted }}</td>
@@ -1088,6 +1185,8 @@
     const comparisonNode = document.getElementById("dashboard-user-metrics");
     const comparisonList = document.getElementById("comparison-list");
     const comparisonMetricSelect = document.getElementById("comparison-metric-select");
+    const breakdownTableBody = document.getElementById("breakdown-table-body");
+    const sortButtons = document.querySelectorAll("[data-sort-key]");
 
     function formatMetricValue(row, metric) {
       if (metric === "acceptance_rate" || metric === "response_rate") {
@@ -1135,6 +1234,89 @@
         renderComparison(comparisonMetricSelect.value);
       });
       renderComparison(comparisonMetricSelect.value);
+    }
+
+    if (breakdownTableBody && sortButtons.length) {
+      let activeSortKey = "";
+      let activeSortState = "default";
+
+      function updateSortButtonState() {
+        sortButtons.forEach(function (button) {
+          button.classList.remove("active");
+          const icon = button.querySelector("i");
+          if (!icon) return;
+
+          if (button.getAttribute("data-sort-key") === activeSortKey) {
+            button.classList.add("active");
+            if (activeSortState === "asc") {
+              icon.className = "bi bi-sort-up";
+            } else if (activeSortState === "desc") {
+              icon.className = "bi bi-sort-down";
+            } else {
+              icon.className = "bi bi-arrow-down-up";
+            }
+          } else {
+            icon.className = "bi bi-arrow-down-up";
+          }
+        });
+      }
+
+      function sortBreakdownRows(sortKey, sortType, sortState) {
+        const rows = Array.from(breakdownTableBody.querySelectorAll("tr[data-row-index]"));
+        if (!rows.length) return;
+
+        const sortedRows = rows.slice().sort(function (a, b) {
+          if (sortState === "default") {
+            return Number(a.getAttribute("data-row-index")) - Number(b.getAttribute("data-row-index"));
+          }
+
+          const rawA = a.getAttribute("data-" + sortKey) || "";
+          const rawB = b.getAttribute("data-" + sortKey) || "";
+          let valueA = rawA;
+          let valueB = rawB;
+
+          if (sortType === "number") {
+            valueA = Number(rawA);
+            valueB = Number(rawB);
+          }
+
+          if (valueA < valueB) {
+            return sortState === "asc" ? -1 : 1;
+          }
+          if (valueA > valueB) {
+            return sortState === "asc" ? 1 : -1;
+          }
+
+          return Number(a.getAttribute("data-row-index")) - Number(b.getAttribute("data-row-index"));
+        });
+
+        sortedRows.forEach(function (row) {
+          breakdownTableBody.appendChild(row);
+        });
+      }
+
+      sortButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          const sortKey = button.getAttribute("data-sort-key");
+          const sortType = button.getAttribute("data-sort-type") || "text";
+          let nextState = "asc";
+
+          if (activeSortKey === sortKey) {
+            if (activeSortState === "asc") {
+              nextState = "desc";
+            } else if (activeSortState === "desc") {
+              nextState = "default";
+            }
+          }
+
+          activeSortState = nextState;
+          activeSortKey = nextState === "default" ? "" : sortKey;
+          sortBreakdownRows(sortKey, sortType, nextState);
+          updateSortButtonState();
+        });
+      });
+
+      updateSortButtonState();
     }
   })();
 </script>

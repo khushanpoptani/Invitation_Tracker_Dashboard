@@ -498,7 +498,7 @@ def build_breakdown_rows(connections, group_by):
 
     def get_group_subtext(connection):
         if group_by == "message":
-            return "Message ID"
+            return ""
         return f"@{connection.user.username}"
 
     for connection in connections:
