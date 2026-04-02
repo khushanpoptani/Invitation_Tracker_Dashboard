@@ -59,6 +59,15 @@ class FollowUpMessage(models.Model):
 
 
 class SentConnection(models.Model):
+    PROSPECT_FOLLOW_UP_COMPLETED = "follow_up_completed"
+    PROSPECT_NOT_INTERESTED = "not_interested"
+    PROSPECT_RESPONDED = "responded"
+    PROSPECT_CHOICES = [
+        (PROSPECT_FOLLOW_UP_COMPLETED, "Follow Up Completed"),
+        (PROSPECT_NOT_INTERESTED, "Not Interested"),
+        (PROSPECT_RESPONDED, "Responded"),
+    ]
+
     name = models.CharField(max_length=255)
     profile_link = models.URLField(blank=True)
     message = models.TextField(blank=True)
@@ -66,6 +75,7 @@ class SentConnection(models.Model):
     date = models.DateField(default=timezone.localdate)
     status_date = models.DateField(null=True, blank=True)
     responded = models.BooleanField(default=False)
+    prospect = models.CharField(max_length=32, choices=PROSPECT_CHOICES, null=True, blank=True)
     connection_status = models.ForeignKey(
         ConnectionStatus,
         on_delete=models.PROTECT,

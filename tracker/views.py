@@ -47,6 +47,7 @@ NAME_PREFIXES = {
     "mx",
     "mx.",
 }
+PROSPECT_LABELS = dict(SentConnection.PROSPECT_CHOICES)
 
 
 def parse_filter_date(raw_value):
@@ -507,6 +508,7 @@ def build_breakdown_rows(connections, group_by):
             {
                 "label": get_group_label(connection),
                 "subtext": get_group_subtext(connection),
+                "hover_text": (connection.message or "").strip() if group_by == "message" else "",
                 "sent": 0,
                 "accepted": 0,
                 "follow_up": 0,
@@ -515,6 +517,8 @@ def build_breakdown_rows(connections, group_by):
         )
 
         row["sent"] += 1
+        if group_by == "message" and not row["hover_text"] and (connection.message or "").strip():
+            row["hover_text"] = (connection.message or "").strip()
         if connection_status_name(connection) == "accepted":
             row["accepted"] += 1
         row["follow_up"] += follow_up_event_count(connection)
@@ -945,6 +949,12 @@ def dashboard(request):
         ),
     ]
 
+    selected_message_format = ""
+    if selected_message_id:
+        selected_option = next((option for option in message_options if option["message_id"] == selected_message_id), None)
+        if selected_option:
+            selected_message_format = selected_option.get("message_text", "")
+
     template_name = "tracker/dashboard_pdf.html" if export_mode == "pdf" else "tracker/dashboard.html"
 
     return render(
@@ -974,6 +984,7 @@ def dashboard(request):
             "rate_cards": rate_cards,
             "breakdown_by": breakdown_by,
             "breakdown_rows": breakdown_rows,
+            "selected_message_format": selected_message_format,
             "selected_user_name": (
                 selected_user.get_full_name().strip() or selected_user.username
                 if selected_user
@@ -1089,6 +1100,7 @@ def sent_connections_list(request):
                 "Status Date",
                 "Status",
                 "Responded",
+                "Prospect",
                 "Follow Up Sent Count",
                 "Follow Up 1",
                 "Follow Up 2",
@@ -1111,6 +1123,7 @@ def sent_connections_list(request):
                     row.status_date.isoformat() if row.status_date else "",
                     row.connection_status.name if row.connection_status else "",
                     "True" if row.responded else "False",
+                    PROSPECT_LABELS.get(row.prospect, ""),
                     row.follow_up_sent_count,
                     row.follow_up_message_1,
                     row.follow_up_message_2,
@@ -1981,6 +1994,19 @@ def follow_up_hub(request):
         messages.success(request, f"Follow up {follow_up_index} marked as sent for {connection.name}.")
         return redirect_with_filters()
 
+    if request.method == "POST" and request.POST.get("action") == "update_prospect":
+        connection = get_object_or_404(SentConnection, pk=request.POST.get("connection_id"))
+        prospect_value = request.POST.get("prospect", "").strip()
+        if prospect_value not in PROSPECT_LABELS:
+            messages.error(request, "Invalid prospect value.")
+            return redirect_with_filters()
+
+        connection.prospect = prospect_value
+        connection.responded = prospect_value == SentConnection.PROSPECT_RESPONDED
+        connection.save(update_fields=["prospect", "responded", "updated_at"])
+        messages.success(request, f"Prospect updated to {PROSPECT_LABELS[prospect_value]} for {connection.name}.")
+        return redirect_with_filters()
+
     if request.method == "POST" and request.POST.get("action") == "update_responded":
         connection = get_object_or_404(SentConnection, pk=request.POST.get("connection_id"))
         responded_value = request.POST.get("responded", "").strip().lower()
@@ -2001,6 +2027,7 @@ def follow_up_hub(request):
         SentConnection.objects.select_related("user", "connection_status")
         .annotate(follow_up_sent_count=follow_up_sent_count_expression())
         .filter(connection_status=accepted_status)
+        .filter(Q(prospect__isnull=True) | Q(prospect=""))
         if accepted_status
         else SentConnection.objects.none()
     )
@@ -2042,6 +2069,7 @@ def follow_up_hub(request):
                 "Message ID",
                 "Accepted Date",
                 "Responded",
+                "Prospect",
                 "Follow Up Sent Count",
                 "Follow Up 1",
                 "Follow Up Sent Date 1",
@@ -2059,6 +2087,7 @@ def follow_up_hub(request):
                     row.message_id,
                     row.status_date.isoformat() if row.status_date else (row.date.isoformat() if row.date else ""),
                     "True" if row.responded else "False",
+                    PROSPECT_LABELS.get(row.prospect, ""),
                     row.follow_up_sent_count,
                     row.follow_up_message_1,
                     row.follow_up_sent_date_1.isoformat() if row.follow_up_sent_date_1 else "",
@@ -2082,6 +2111,8 @@ def follow_up_hub(request):
             "selected_from_date": from_date.isoformat() if from_date else "",
             "selected_to_date": to_date.isoformat() if to_date else "",
             "today": timezone.localdate().isoformat(),
+            "prospect_options": SentConnection.PROSPECT_CHOICES,
+            "prospect_labels": PROSPECT_LABELS,
         },
     )
 

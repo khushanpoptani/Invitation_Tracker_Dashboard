@@ -280,6 +280,7 @@
             <th>Date</th>
             <th>Status</th>
             <th>Responded</th>
+            <th>Prospect</th>
             <th>Follow Up Sent</th>
             <th>Follow Up 1</th>
             <th>Follow Up 2</th>
@@ -309,6 +310,17 @@
                   <span class="badge text-bg-secondary">False</span>
                 {% endif %}
               </td>
+              <td>
+                {% if row.prospect == "follow_up_completed" %}
+                  <span class="badge text-bg-primary">Follow Up Completed</span>
+                {% elif row.prospect == "not_interested" %}
+                  <span class="badge text-bg-warning">Not Interested</span>
+                {% elif row.prospect == "responded" %}
+                  <span class="badge text-bg-success">Responded</span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
               <td>{{ row.follow_up_sent_count }}</td>
               <td>{{ row.follow_up_message_1|default:'-'|truncatechars:45 }}</td>
               <td>{{ row.follow_up_message_2|default:'-'|truncatechars:45 }}</td>
@@ -317,7 +329,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="12" class="text-center text-muted py-4">No sent connections found.</td>
+              <td colspan="13" class="text-center text-muted py-4">No sent connections found.</td>
             </tr>
           {% endfor %}
         </tbody>

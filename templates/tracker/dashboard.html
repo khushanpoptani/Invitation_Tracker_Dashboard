@@ -80,6 +80,34 @@
     font-size: 0.85rem;
   }
 
+  .message-format-tile {
+    max-width: 22rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.95rem;
+    border: 1px solid #d8e4f0;
+    background: #f8fbff;
+    color: #28425f;
+  }
+
+  .message-format-label {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #68809a;
+    margin-bottom: 0.12rem;
+  }
+
+  .message-format-value {
+    display: block;
+    font-size: 0.84rem;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .custom-date-row {
     display: contents;
   }
@@ -677,6 +705,12 @@
       <input type="hidden" name="breakdown" value="{{ breakdown_by }}">
       <div class="filter-actions-wrap">
         <div class="filter-actions">
+          {% if selected_message_id and selected_message_format %}
+            <div class="message-format-tile" title="{{ selected_message_format }}">
+              <span class="message-format-label">Selected Message Format</span>
+              <span class="message-format-value">{{ selected_message_format }}</span>
+            </div>
+          {% endif %}
           <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Reset</a>
           <div class="dropdown">
             <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -897,7 +931,7 @@
           {% for row in breakdown_rows %}
             <tr>
               <td>
-                <div class="breakdown-entity">{{ row.label }}</div>
+                <div class="breakdown-entity" {% if breakdown_by == "message" and row.hover_text %}title="{{ row.hover_text }}"{% endif %}>{{ row.label }}</div>
                 <div class="breakdown-subtext">{{ row.subtext }}</div>
               </td>
               <td>{{ row.sent }}</td>
