@@ -39,6 +39,10 @@
     max-width: 340px;
   }
 
+  .top-page-size-picker {
+    min-width: 150px;
+  }
+
   .filters-card .card-body {
     padding: 1rem 1rem 1.1rem;
   }
@@ -99,6 +103,32 @@
   .connections-table .message-cell {
     max-width: 340px;
   }
+
+  .pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+    padding: 0.95rem 1rem 1rem;
+    border-top: 1px solid #e3ebf4;
+  }
+
+  .pagination-summary {
+    color: #62758c;
+    font-size: 0.9rem;
+  }
+
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .pagination-controls .btn {
+    min-width: 2.5rem;
+  }
 </style>
 
 <div class="connections-page">
@@ -122,6 +152,20 @@
             <option value="{{ user_obj.id }}" {% if selected_user_id == user_obj.id|stringformat:"s" %}selected{% endif %}>
               {{ user_obj.get_full_name|default:user_obj.username }} (@{{ user_obj.username }})
             </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="top-page-size-picker">
+        <label for="sent-connections-page-size" class="form-label mb-1">Rows</label>
+        <select
+          id="sent-connections-page-size"
+          name="page_size"
+          class="form-select"
+          form="sent-connections-filter-form"
+          data-auto-submit
+        >
+          {% for option in page_size_options %}
+            <option value="{{ option }}" {% if selected_page_size == option %}selected{% endif %}>{{ option }} / page</option>
           {% endfor %}
         </select>
       </div>
@@ -335,6 +379,32 @@
         </tbody>
       </table>
     </div>
+    {% if page_obj %}
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ paginator.count }} connection{{ paginator.count|pluralize }}
+        </div>
+        <div class="pagination-controls">
+          {% if page_obj.has_previous %}
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'sent_connections_list' %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page=1">First</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'sent_connections_list' %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
+          {% else %}
+            <span class="btn btn-outline-secondary btn-sm disabled">First</span>
+            <span class="btn btn-outline-secondary btn-sm disabled">Prev</span>
+          {% endif %}
+
+          <span class="btn btn-light btn-sm disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+
+          {% if page_obj.has_next %}
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'sent_connections_list' %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            <a class="btn btn-outline-secondary btn-sm" href="{% url 'sent_connections_list' %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ paginator.num_pages }}">Last</a>
+          {% else %}
+            <span class="btn btn-outline-secondary btn-sm disabled">Next</span>
+            <span class="btn btn-outline-secondary btn-sm disabled">Last</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 </div>
 

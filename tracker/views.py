@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -1027,6 +1028,7 @@ def dashboard(request):
 @login_required
 def sent_connections_list(request):
     users = User.objects.filter(is_active=True).order_by("username")
+    page_size_options = [10, 25, 50, 100]
     selected_user_id = request.GET.get("user", "").strip()
     selected_message_id = request.GET.get("message_id", "").strip()
     selected_status_id = request.GET.get("status", "").strip()
@@ -1137,8 +1139,25 @@ def sent_connections_list(request):
 
         return response
 
+    raw_page_size = request.GET.get("page_size", "").strip()
+    try:
+        selected_page_size = int(raw_page_size or 25)
+    except ValueError:
+        selected_page_size = 25
+    if selected_page_size not in page_size_options:
+        selected_page_size = 25
+
+    paginator = Paginator(connections, selected_page_size)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    pagination_params = request.GET.copy()
+    pagination_params.pop("page", None)
+    pagination_query = pagination_params.urlencode()
+
     context = {
-        "connections": connections,
+        "connections": page_obj.object_list,
+        "page_obj": page_obj,
+        "paginator": paginator,
         "users": users,
         "message_options": message_options,
         "status_options": status_options,
@@ -1150,6 +1169,9 @@ def sent_connections_list(request):
         "selected_search_query": search_query,
         "selected_from_date": from_date.isoformat() if from_date else "",
         "selected_to_date": to_date.isoformat() if to_date else "",
+        "selected_page_size": selected_page_size,
+        "page_size_options": page_size_options,
+        "pagination_query": pagination_query,
     }
     return render(request, "tracker/sent_connections_list.html", context)
 
